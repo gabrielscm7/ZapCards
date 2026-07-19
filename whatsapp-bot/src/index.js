@@ -1,29 +1,41 @@
-import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys";
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 import pino from "pino";
+import { toDataURL } from "qrcode";
 
 const logger = pino({ level: "info" });
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState("auth_info");
+  const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
+    version,
     auth: state,
     logger,
-    printQRInTerminal: true,
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", ({ connection, lastDisconnect }) => {
+  sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      const qrDataUrl = await toDataURL(qr);
+      logger.info("=== ESCANEIE O QR CODE NO WHATSAPP (Config > Linked Devices) ===");
+      logger.info(qrDataUrl);
+      logger.info("=== FIM QR CODE ===");
+    }
+
     if (connection === "close") {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      logger.info({ statusCode, shouldReconnect }, "Conexao fechada");
       if (shouldReconnect) {
         setTimeout(connectToWhatsApp, 5000);
+      } else {
+        logger.info("Sessao encerrada. Reinicie para gerar novo QR code.");
       }
     } else if (connection === "open") {
-      logger.info("WhatsApp bot conectado!");
+      logger.info("WhatsApp bot conectado e pronto para uso!");
     }
   });
 
