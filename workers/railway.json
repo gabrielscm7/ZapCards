@@ -1,8 +1,6 @@
 {
   "build": {
-    "builder": "nixpacks",
-    "buildCommand": "pip install uv && uv pip install --system -r <(uv pip compile pyproject.toml -o -)",
-    "nixpacks": { "aptPackages": ["tesseract-ocr", "tesseract-ocr-por"] }
+    "builder": "nixpacks"
   },
   "deploy": {
     "startCommand": "arq app.main:WorkerSettings --workers 4"
