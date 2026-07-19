@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 
@@ -19,5 +21,3 @@ class User(Base):
     )
 
     review_history: Mapped[list["ReviewHistory"]] = relationship(back_populates="user", lazy="selectin")
-
-    from app.models.flashcard import ReviewHistory  # noqa: F811

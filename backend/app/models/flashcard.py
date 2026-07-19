@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 
@@ -28,8 +30,6 @@ class Flashcard(Base):
     note: Mapped["Note"] = relationship(back_populates="flashcards")
     reviews: Mapped[list["ReviewHistory"]] = relationship(back_populates="flashcard", lazy="selectin")
 
-    from app.models.note import Note  # noqa: F811
-
 
 class ReviewHistory(Base):
     __tablename__ = "review_history"
@@ -53,5 +53,3 @@ class ReviewHistory(Base):
 
     flashcard: Mapped["Flashcard"] = relationship(back_populates="reviews")
     user: Mapped["User"] = relationship(back_populates="review_history")
-
-    from app.models.user import User  # noqa: F811
