@@ -4,7 +4,6 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "node .next/standalone/server.js",
-    "healthcheckPath": "/"
+    "startCommand": "node .next/standalone/server.js"
   }
 }

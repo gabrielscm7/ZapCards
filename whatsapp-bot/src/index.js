@@ -17,7 +17,8 @@ async function connectToWhatsApp() {
 
   sock.ev.on("connection.update", ({ connection, lastDisconnect }) => {
     if (connection === "close") {
-      const shouldReconnect = (lastDisconnect?.error as any)?.output?.statusCode !== DisconnectReason.loggedOut;
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       if (shouldReconnect) {
         setTimeout(connectToWhatsApp, 5000);
       }
