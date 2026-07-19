@@ -1,0 +1,29 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.database import get_db
+from app.schemas.chat import ChatMessage, ChatResponse
+from app.services.embed import embed_query, search_similar
+from app.services.llm import chat_with_context
+
+router = APIRouter()
+
+
+@router.post("", response_model=ChatResponse)
+async def chat(payload: ChatMessage, db: AsyncSession = Depends(get_db)):
+    query_embedding = await embed_query(payload.content)
+    chunks = await search_similar(db, query_embedding, limit=5)
+
+    if not chunks:
+        return ChatResponse(content="Nao encontrei nenhum conteudo sobre isso nos seus estudos. Tente adicionar notas sobre esse assunto primeiro!")
+
+    best_score = chunks[0][1]
+    if best_score < settings.SIMILARITY_THRESHOLD:
+        return ChatResponse(content="Nao tenho informacao suficiente sobre isso no seu material de estudo. Que tal criar uma nota sobre esse topico?")
+
+    context = "\n\n".join(c[0] for c in chunks)
+    response = await chat_with_context(payload.content, context)
+
+    return ChatResponse(content=response, sources=[])

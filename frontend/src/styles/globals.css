@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --color-zap-50: #f0fdf4;
+  --color-zap-100: #dcfce7;
+  --color-zap-200: #bbf7d0;
+  --color-zap-300: #86efac;
+  --color-zap-400: #4ade80;
+  --color-zap-500: #22c55e;
+  --color-zap-600: #16a34a;
+  --color-zap-700: #15803d;
+  --color-zap-800: #166534;
+  --color-zap-900: #14532d;
+  --color-zap-950: #052e16;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+}

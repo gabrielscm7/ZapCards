@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.env
+.venv/
+venv/
+node_modules/
+.next/
+.turbo/
+*.log
+auth_info/
+.DS_Store
+Thumbs.db
