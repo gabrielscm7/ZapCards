@@ -1,6 +1,6 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 import pino from "pino";
-import { toDataURL } from "qrcode";
+import qrcode from "qrcode-terminal";
 
 const logger = pino({ level: "info" });
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
@@ -19,10 +19,9 @@ async function connectToWhatsApp() {
 
   sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      const qrDataUrl = await toDataURL(qr);
       logger.info("=== ESCANEIE O QR CODE NO WHATSAPP (Config > Linked Devices) ===");
-      logger.info(qrDataUrl);
-      logger.info("=== FIM QR CODE ===");
+      qrcode.generate(qr, { small: true });
+      logger.info("=== Copie o QR acima e cole num visualizador, ou escaneie direto da tela ===");
     }
 
     if (connection === "close") {
