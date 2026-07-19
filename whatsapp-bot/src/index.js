@@ -34,7 +34,7 @@ async function connectToWhatsApp() {
       const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
       if (!text) continue;
 
-      const jid = msg.key.remoteJid!;
+      const jid = msg.key.remoteJid;
       logger.info({ jid, text }, "Mensagem recebida");
 
       if (text.toLowerCase().includes("treinar") || text.toLowerCase().includes("flashcard")) {
@@ -56,7 +56,7 @@ async function connectToWhatsApp() {
   });
 }
 
-async function handleStudySession(sock: any, jid: string, command: string) {
+async function handleStudySession(sock, jid, command) {
   await sock.sendMessage(jid, { text: "Buscando flashcards para voce..." });
 
   try {
