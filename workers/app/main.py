@@ -7,7 +7,7 @@ import sys
 from arq import create_pool
 from arq.connections import RedisSettings
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
 
 from app.core.config import settings
 from app.core.s3 import get_file, save_file

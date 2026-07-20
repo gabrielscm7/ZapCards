@@ -3,6 +3,6 @@
     "builder": "nixpacks"
   },
   "deploy": {
-    "startCommand": "arq app.main:WorkerSettings --workers 4"
+    "startCommand": "arq app.main.WorkerSettings"
   }
 }
