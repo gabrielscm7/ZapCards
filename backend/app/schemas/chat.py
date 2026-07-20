@@ -1,6 +1,6 @@
-import uuid
+from typing import Any
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, field_validator
 
 
 class ChatMessage(BaseModel):
@@ -17,6 +17,7 @@ class ImportResult(BaseModel):
     title: str
     source_type: str
 
-    @field_serializer("note_id")
-    def _serialize_id(self, value: uuid.UUID | str) -> str:
-        return str(value)
+    @field_validator("note_id", mode="before")
+    @classmethod
+    def _coerce_id(cls, v: Any) -> str:
+        return str(v)

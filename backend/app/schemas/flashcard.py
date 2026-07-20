@@ -1,7 +1,6 @@
-import uuid
-from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, field_validator
 
 
 class FlashcardGenerate(BaseModel):
@@ -19,15 +18,17 @@ class FlashcardOut(BaseModel):
     created_at: str
     model_config = {"from_attributes": True}
 
-    @field_serializer("id", "note_id")
-    def _serialize_id(self, value: uuid.UUID | str) -> str:
-        return str(value)
+    @field_validator("id", "note_id", mode="before")
+    @classmethod
+    def _coerce_id(cls, v: Any) -> str:
+        return str(v)
 
-    @field_serializer("created_at")
-    def _serialize_datetime(self, value: datetime | str) -> str:
-        if isinstance(value, datetime):
-            return value.isoformat()
-        return value
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _coerce_datetime(cls, v: Any) -> str:
+        if hasattr(v, "isoformat"):
+            return v.isoformat()
+        return str(v)
 
 
 class ReviewSubmit(BaseModel):
@@ -47,12 +48,14 @@ class ReviewOut(BaseModel):
     next_review: str
     model_config = {"from_attributes": True}
 
-    @field_serializer("id", "flashcard_id", "user_id")
-    def _serialize_id(self, value: uuid.UUID | str) -> str:
-        return str(value)
+    @field_validator("id", "flashcard_id", "user_id", mode="before")
+    @classmethod
+    def _coerce_id(cls, v: Any) -> str:
+        return str(v)
 
-    @field_serializer("reviewed_at", "next_review")
-    def _serialize_datetime(self, value: datetime | str) -> str:
-        if isinstance(value, datetime):
-            return value.isoformat()
-        return value
+    @field_validator("reviewed_at", "next_review", mode="before")
+    @classmethod
+    def _coerce_datetime(cls, v: Any) -> str:
+        if hasattr(v, "isoformat"):
+            return v.isoformat()
+        return str(v)

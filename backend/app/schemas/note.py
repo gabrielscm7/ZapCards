@@ -1,7 +1,6 @@
-import uuid
-from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, field_validator
 
 
 class TagOut(BaseModel):
@@ -9,9 +8,10 @@ class TagOut(BaseModel):
     name: str
     model_config = {"from_attributes": True}
 
-    @field_serializer("id")
-    def _serialize_id(self, value: uuid.UUID | str) -> str:
-        return str(value)
+    @field_validator("id", mode="before")
+    @classmethod
+    def _coerce_id(cls, v: Any) -> str:
+        return str(v)
 
 
 class NoteCreate(BaseModel):
@@ -42,12 +42,14 @@ class NoteOut(BaseModel):
     tags: list[TagOut] = []
     model_config = {"from_attributes": True}
 
-    @field_serializer("id")
-    def _serialize_id(self, value: uuid.UUID | str) -> str:
-        return str(value)
+    @field_validator("id", mode="before")
+    @classmethod
+    def _coerce_id(cls, v: Any) -> str:
+        return str(v)
 
-    @field_serializer("created_at", "updated_at")
-    def _serialize_datetime(self, value: datetime | str) -> str:
-        if isinstance(value, datetime):
-            return value.isoformat()
-        return value
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def _coerce_datetime(cls, v: Any) -> str:
+        if hasattr(v, "isoformat"):
+            return v.isoformat()
+        return str(v)
