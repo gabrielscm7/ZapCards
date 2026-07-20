@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import notes, flashcards, chat, import_
+from app.api import notes, flashcards, chat, import_, auth, settings as settings_api
 from app.core.config import settings
 from app.core.database import engine, Base
 import app.models  # noqa: F401 — registers all models
@@ -48,6 +48,8 @@ app.include_router(notes.router, prefix="/api/notes", tags=["notes"])
 app.include_router(import_.router, prefix="/api/notes/import", tags=["import"])
 app.include_router(flashcards.router, prefix="/api/flashcards", tags=["flashcards"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(settings_api.router, prefix="/api", tags=["settings"])
 
 
 @app.get("/api/health")

@@ -23,7 +23,14 @@ async def chat(payload: ChatMessage, db: AsyncSession = Depends(get_db)):
     if best_score < settings.SIMILARITY_THRESHOLD:
         return ChatResponse(content="Nao tenho informacao suficiente sobre isso no seu material de estudo. Que tal criar uma nota sobre esse topico?")
 
-    context = "\n\n".join(c[0] for c in chunks)
+    contents = [c[0] for c in chunks]
+    scores = [c[1] for c in chunks]
+    context = "\n\n".join(contents)
     response = await chat_with_context(payload.content, context)
 
-    return ChatResponse(content=response, sources=[])
+    sources = [
+        f"[{scores[i]:.2f}] {contents[i][:120]}..."
+        for i in range(len(contents))
+    ]
+
+    return ChatResponse(content=response, sources=sources)

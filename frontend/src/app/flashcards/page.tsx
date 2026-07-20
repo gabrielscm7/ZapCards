@@ -2,6 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { Brain, Trash2, FlipHorizontal, Zap } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function FlashcardsPage() {
   const [cards, setCards] = useState<any[]>([]);
@@ -10,103 +24,197 @@ export default function FlashcardsPage() {
   const [difficulty, setDifficulty] = useState("medio");
   const [quantity, setQuantity] = useState(5);
   const [flipped, setFlipped] = useState<Record<string, boolean>>({});
+  const [generating, setGenerating] = useState(false);
 
   const load = async () => {
-    const [c, n] = await Promise.all([api.flashcards.list(), api.notes.list()]);
-    setCards(c);
-    setNotes(n);
+    try {
+      const [c, n] = await Promise.all([api.flashcards.list(), api.notes.list()]);
+      setCards(c);
+      setNotes(n);
+    } catch {
+      toast.error("Erro ao carregar dados");
+    }
   };
 
   useEffect(() => { load(); }, []);
 
   const generate = async () => {
     if (!selectedNotes.length) return;
-    await api.flashcards.generate({ note_ids: selectedNotes, difficulty, quantity });
-    load();
+    setGenerating(true);
+    try {
+      const newCards = await api.flashcards.generate({
+        note_ids: selectedNotes,
+        difficulty,
+        quantity,
+      });
+      toast.success(`${newCards.length} flashcards gerados!`);
+      load();
+    } catch {
+      toast.error("Erro ao gerar flashcards");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const remove = async (id: string) => {
-    await api.flashcards.delete(id);
-    load();
+    try {
+      await api.flashcards.delete(id);
+      toast.success("Flashcard removido");
+      load();
+    } catch {
+      toast.error("Erro ao remover flashcard");
+    }
+  };
+
+  const toggleFlip = (id: string) => {
+    setFlipped((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   return (
-    <main className="min-h-screen p-8 max-w-4xl mx-auto">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-zap-400">Flashcards</h1>
-        <p className="text-zinc-400 mt-1">Repeticao espacada inteligente com FSRS</p>
+    <div className="p-8 max-w-5xl mx-auto space-y-6">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">Flashcards</h1>
+        <p className="text-muted-foreground mt-1">Repeticao espacada inteligente com FSRS</p>
       </header>
 
-      <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/50 mb-8">
-        <label className="block text-sm text-zinc-400 mb-2">Selecione notas como fonte</label>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {notes.map((n: any) => (
-            <button
-              key={n.id}
-              onClick={() => setSelectedNotes(prev => prev.includes(n.id) ? prev.filter(x => x !== n.id) : [...prev, n.id])}
-              className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                selectedNotes.includes(n.id)
-                  ? "bg-zap-600 border-zap-500 text-white"
-                  : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600"
-              }`}
-            >
-              {n.title || "Sem titulo"}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-3 mb-3">
-          <select
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-zinc-100"
-          >
-            <option value="facil">Facil</option>
-            <option value="medio">Medio</option>
-            <option value="dificil">Dificil</option>
-          </select>
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={quantity}
-            onChange={(e) => setQuantity(Number(e.target.value))}
-            className="w-24 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-zinc-100"
-          />
-        </div>
-        <button
-          onClick={generate}
-          disabled={!selectedNotes.length}
-          className="bg-zap-600 hover:bg-zap-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-        >
-          Gerar Flashcards
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {cards.map((c: any) => (
-          <div
-            key={c.id}
-            onClick={() => setFlipped(prev => ({ ...prev, [c.id]: !prev[c.id] }))}
-            className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:border-zap-600 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center"
-          >
-            <div className="flex justify-between items-start mb-2">
-              <span className={`text-xs px-2 py-0.5 rounded ${
-                c.difficulty === "facil" ? "bg-green-900 text-green-400" :
-                c.difficulty === "dificil" ? "bg-red-900 text-red-400" :
-                "bg-yellow-900 text-yellow-400"
-              }`}>
-                {c.difficulty}
-              </span>
-              <button onClick={(e) => { e.stopPropagation(); remove(c.id); }} className="text-zinc-600 hover:text-red-400 text-xs">
-                excluir
-              </button>
-            </div>
-            <p className="text-zinc-100 font-medium">{c.question}</p>
-            {flipped[c.id] && <p className="text-zap-400 mt-2 text-sm">{c.answer}</p>}
-            <p className="text-zinc-600 text-xs mt-2">Clique para {flipped[c.id] ? "esconder" : "revelar"} resposta</p>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Zap className="w-5 h-5 text-primary" />
+            Gerar Flashcards
+          </CardTitle>
+          <CardDescription>Selecione notas como fonte para geracao por IA</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {notes.map((n: any) => (
+              <Badge
+                key={n.id}
+                variant={selectedNotes.includes(n.id) ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() =>
+                  setSelectedNotes((prev) =>
+                    prev.includes(n.id) ? prev.filter((x) => x !== n.id) : [...prev, n.id]
+                  )
+                }
+              >
+                {n.title || "Sem titulo"}
+              </Badge>
+            ))}
           </div>
+
+          <div className="flex gap-3 items-end">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Dificuldade</label>
+              <Select value={difficulty} onValueChange={(v) => v && setDifficulty(v)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="facil">Facil</SelectItem>
+                  <SelectItem value="medio">Medio</SelectItem>
+                  <SelectItem value="dificil">Dificil</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Quantidade</label>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+                className="w-24"
+              />
+            </div>
+
+            <Button
+              onClick={generate}
+              disabled={!selectedNotes.length || generating}
+              className="gap-2"
+            >
+              <Brain className="w-4 h-4" />
+              {generating ? "Gerando..." : "Gerar Flashcards"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Tabs defaultValue="all">
+        <TabsList>
+          <TabsTrigger value="all">Todos ({cards.length})</TabsTrigger>
+          <TabsTrigger value="facil">Faceis ({cards.filter((c) => c.difficulty === "facil").length})</TabsTrigger>
+          <TabsTrigger value="medio">Medios ({cards.filter((c) => c.difficulty === "medio").length})</TabsTrigger>
+          <TabsTrigger value="dificil">Dificeis ({cards.filter((c) => c.difficulty === "dificil").length})</TabsTrigger>
+        </TabsList>
+
+        {["all", "facil", "medio", "dificil"].map((tab) => (
+          <TabsContent key={tab} value={tab} className="mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(tab === "all" ? cards : cards.filter((c) => c.difficulty === tab)).map((c: any) => (
+                <Card
+                  key={c.id}
+                  className="cursor-pointer hover:border-primary/40 transition-all group"
+                  onClick={() => toggleFlip(c.id)}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <Badge
+                        variant="secondary"
+                        className={
+                          c.difficulty === "facil"
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : c.difficulty === "dificil"
+                              ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                              : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                        }
+                      >
+                        {c.difficulty}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          remove(c.id);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-medium">{c.question}</p>
+                    {flipped[c.id] && (
+                      <div className="mt-3 pt-3 border-t">
+                        <p className="text-primary text-sm">{c.answer}</p>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                      <FlipHorizontal className="w-3 h-3" />
+                      Clique para {flipped[c.id] ? "esconder" : "revelar"} resposta
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+              {cards.length === 0 && (
+                <Card className="col-span-full">
+                  <CardContent className="py-12 text-center">
+                    <Brain className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">Nenhum flashcard ainda.</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Selecione notas acima e gere flashcards com IA.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
         ))}
-      </div>
-    </main>
+      </Tabs>
+    </div>
   );
 }

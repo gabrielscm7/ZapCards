@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { Plus, Trash2, Tag, BookOpen } from "lucide-react";
 
 export default function NotesPage() {
   const [notes, setNotes] = useState<any[]>([]);
@@ -10,99 +17,148 @@ export default function NotesPage() {
   const [content, setContent] = useState("");
   const [area, setArea] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showForm, setShowForm] = useState(false);
 
   const load = async () => {
-    const [n, t] = await Promise.all([api.notes.list(), api.tags.list()]);
-    setNotes(n);
-    setTags(t);
+    try {
+      const [n, t] = await Promise.all([api.notes.list(), api.tags.list()]);
+      setNotes(n);
+      setTags(t);
+    } catch {
+      toast.error("Erro ao carregar notas");
+    }
   };
 
   useEffect(() => { load(); }, []);
 
   const create = async () => {
     if (!title && !content) return;
-    await api.notes.create({ title, content_md: content, area, tags: selectedTags });
-    setTitle(""); setContent(""); setArea(""); setSelectedTags([]);
-    load();
+    try {
+      await api.notes.create({ title, content_md: content, area, tags: selectedTags });
+      setTitle(""); setContent(""); setArea(""); setSelectedTags([]); setShowForm(false);
+      toast.success("Nota criada com sucesso!");
+      load();
+    } catch {
+      toast.error("Erro ao criar nota");
+    }
   };
 
   const remove = async (id: string) => {
-    await api.notes.delete(id);
-    load();
+    try {
+      await api.notes.delete(id);
+      toast.success("Nota excluida");
+      load();
+    } catch {
+      toast.error("Erro ao excluir nota");
+    }
   };
 
   return (
-    <main className="min-h-screen p-8 max-w-4xl mx-auto">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-zap-400">Notas</h1>
-        <p className="text-zinc-400 mt-1">Crie e organize seu conhecimento</p>
+    <div className="p-8 max-w-5xl mx-auto space-y-6">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Notas</h1>
+          <p className="text-muted-foreground mt-1">Crie e organize seu conhecimento</p>
+        </div>
+        <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+          <Plus className="w-4 h-4" />
+          {showForm ? "Fechar" : "Nova Nota"}
+        </Button>
       </header>
 
-      <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/50 mb-8">
-        <input
-          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 mb-3 text-zinc-100 placeholder-zinc-500"
-          placeholder="Titulo da nota"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <textarea
-          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 mb-3 text-zinc-100 placeholder-zinc-500 h-32 font-mono text-sm"
-          placeholder="Conteudo em Markdown..."
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-        />
-        <div className="flex gap-3 mb-3">
-          <input
-            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-zinc-100 placeholder-zinc-500"
-            placeholder="Area (ex: Machine Learning)"
-            value={area}
-            onChange={(e) => setArea(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {tags.map((t: any) => (
-            <button
-              key={t.id}
-              onClick={() => setSelectedTags(prev => prev.includes(t.name) ? prev.filter(x => x !== t.name) : [...prev, t.name])}
-              className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                selectedTags.includes(t.name)
-                  ? "bg-zap-600 border-zap-500 text-white"
-                  : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600"
-              }`}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={create}
-          className="bg-zap-600 hover:bg-zap-500 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-        >
-          Criar Nota
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        {notes.map((n: any) => (
-          <div key={n.id} className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 transition-colors">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-100">{n.title || "Sem titulo"}</h3>
-                {n.area && <span className="text-xs text-zap-400 bg-zap-950 px-2 py-0.5 rounded">{n.area}</span>}
-              </div>
-              <button onClick={() => remove(n.id)} className="text-zinc-600 hover:text-red-400 transition-colors text-sm">
-                excluir
-              </button>
-            </div>
-            <p className="text-zinc-400 text-sm mt-2 line-clamp-2">{n.content_md}</p>
-            <div className="flex gap-1 mt-2">
-              {n.tags?.map((t: any) => (
-                <span key={t.id} className="text-xs bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded">{t.name}</span>
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Nova Nota</CardTitle>
+            <CardDescription>Escreva em Markdown para melhor formatacao</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Input
+              placeholder="Titulo da nota"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <Textarea
+              placeholder="Conteudo em Markdown..."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="min-h-32 font-mono text-sm"
+            />
+            <Input
+              placeholder="Area (ex: Machine Learning)"
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-2">
+              {tags.map((t: any) => (
+                <Badge
+                  key={t.id}
+                  variant={selectedTags.includes(t.name) ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() =>
+                    setSelectedTags((prev) =>
+                      prev.includes(t.name) ? prev.filter((x) => x !== t.name) : [...prev, t.name]
+                    )
+                  }
+                >
+                  <Tag className="w-3 h-3 mr-1" />
+                  {t.name}
+                </Badge>
               ))}
             </div>
-          </div>
+            <Button onClick={create} disabled={!title && !content}>
+              <Plus className="w-4 h-4 mr-2" />
+              Criar Nota
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="space-y-3">
+        {notes.length === 0 && !showForm && (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">Nenhuma nota ainda.</p>
+              <Button variant="outline" className="mt-4" onClick={() => setShowForm(true)}>
+                Criar primeira nota
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {notes.map((n: any) => (
+          <Card key={n.id} className="hover:border-primary/30 transition-colors">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-lg">{n.title || "Sem titulo"}</CardTitle>
+                  {n.area && (
+                    <Badge variant="secondary" className="mt-1 bg-primary/10 text-primary">
+                      {n.area}
+                    </Badge>
+                  )}
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => remove(n.id)}>
+                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap">
+                {n.content_md}
+              </p>
+              <div className="flex gap-1 mt-2">
+                {n.tags?.map((t: any) => (
+                  <Badge key={t.id} variant="outline" className="text-xs">
+                    {t.name}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

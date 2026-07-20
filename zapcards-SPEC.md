@@ -1,7 +1,7 @@
 # SPEC — ZapCards
-**Especificação Técnica**
+**Especificacao Tecnica**
 
-> Este é um documento vivo. Toda alteração relevante de arquitetura, stack ou contrato de dados deve ser registrada no changelog (seção 0) e refletida na seção correspondente. Não editar decisões antigas silenciosamente — registrar a mudança e o motivo.
+> Este documento registra decisoes arquiteturais tecnicas. As alteracoes devem ser documentadas no changelog.
 
 ---
 
@@ -9,37 +9,36 @@
 
 | Campo | Valor |
 |---|---|
-| Versão atual | 1.0.0 |
-| Última atualização | 2026-07-19 |
-| Status | Draft — pré-implementação |
+| Versao atual | 1.2.0 |
+| Ultima atualizacao | 2026-07-20 |
+| Status | Implementacao ativa — backend + frontend funcionais |
 
-| Versão | Data | Alteração | Motivo |
+| Versao | Data | Alteracao | Motivo |
 |---|---|---|---|
-| 1.0.0 | 2026-07-19 | Criação do documento | Esboço inicial completo, cobrindo os 4 módulos |
-| 1.1.0 | 2026-07-19 | Serviços separados (sem monorepo) + Railway Buckets + Arq | Separação de serviços para deploy independente; Buckets Railway no lugar de Cloudflare R2; Arq no lugar de Celery |
+| 1.0.0 | 2026-07-19 | Criacao do documento | Esboco inicial |
+| 1.1.0 | 2026-07-19 | Servicos separados + Railway Buckets + Arq | Deploy independente |
+| 1.2.0 | 2026-07-20 | Auth JWT, shadcn/ui, dark/light theme, dashboard com charts, import pipeline conectado, WhatsApp loop interativo, dev storage local, testes | Feature completion + UX overhaul |
 
 ---
 
-## 1. Princípio arquitetural
+## 1. Principio arquitetural
 
-O núcleo de notas em Markdown é a fonte única da verdade. Todos os módulos (grafo, geração de flashcards, chatbox, bot de WhatsApp) leem e escrevem nesse núcleo; nenhum mantém lógica de conteúdo própria fora dele. Toda resposta gerada por IA é restrita ao conteúdo indexado do usuário (RAG fechado, sem busca externa).
+O nucleo de notas em Markdown e a fonte unica da verdade. Todos os modulos leem e escrevem nesse nucleo. Toda resposta IA e restrita ao conteudo indexado (RAG fechado).
 
 ## 2. Componentes e onde rodam
 
 | Componente | Responsabilidade | Hospedagem |
 |---|---|---|
-| Frontend web (Next.js) | Editor Markdown, visualização de grafo, chatbox | Railway |
-| API principal (FastAPI) | Regras de negócio, autenticação, orquestração | Railway |
-| PostgreSQL + pgvector | Notas, tags, links, histórico de flashcards, embeddings | Railway |
-| Redis + workers (Celery/Arq) | Filas de OCR, conversão de arquivo, transcrição | Railway |
-| Modelo de embeddings (local) | Vetorização de notas e queries para RAG | Railway (CPU) |
-| OCR (Tesseract / TrOCR) | Extração de texto de imagens | Railway (CPU) |
-| Armazenamento de arquivos originais | Guarda do arquivo bruto importado | Cloudflare R2 (S3-compatível) |
-| Inferência de LLM (geração de texto) | Flashcards, testes, respostas do chatbox, NLU do bot | Groq API (externo) |
-| Transcrição de áudio/vídeo (opcional) | Alternativa ao Whisper self-hosted | Groq API (Whisper Turbo) |
-| Bot de WhatsApp | Interface de conversa | WhatsApp Business Cloud API (produção) / Baileys (MVP) |
+| Frontend web (Next.js) | Editor Markdown, visualizacao de grafo, chatbox, dashboard | Railway |
+| API principal (FastAPI) | Regras de negocio, autenticacao, orquestracao | Railway |
+| PostgreSQL + pgvector | Notas, tags, links, historico de flashcards, embeddings | Railway |
+| Redis + workers (Arq) | Filas de OCR, conversao, transcricao | Railway |
+| Modelo de embeddings (local) | Vetorizacao para RAG | Railway (CPU) |
+| Armazenamento de arquivos | Guarda do arquivo bruto | Railway Buckets / S3 / Local |
+| Inferencia de LLM | Flashcards, testes, respostas do chatbox | Groq API |
+| Bot de WhatsApp | Interface de conversa interativa | Baileys (MVP) |
 
-## 3. Modelo de dados (visão inicial)
+## 3. Modelo de dados
 
 ```
 notes
@@ -48,7 +47,7 @@ notes
   content_md    text
   area          text
   source_type   enum(text, ocr, pdf, docx, csv, audio, video)
-  source_file   text (referência ao objeto no storage, se houver)
+  source_file   text
   created_at    timestamp
   updated_at    timestamp
 
@@ -56,19 +55,9 @@ tags
   id            uuid pk
   name          text unique
 
-note_tags
-  note_id       fk -> notes.id
-  tag_id        fk -> tags.id
-
-note_links
-  from_note_id  fk -> notes.id
-  to_note_id    fk -> notes.id
-
-note_chunks
-  id            uuid pk
-  note_id       fk -> notes.id
-  content       text
-  embedding     vector(dim)   -- pgvector
+note_tags        (many-to-many)
+note_links       (directed graph edges)
+note_chunks      (pgvector embeddings, 1024-dim, IVFFlat index)
 
 flashcards
   id            uuid pk
@@ -76,99 +65,111 @@ flashcards
   question      text
   answer        text
   difficulty    enum(facil, medio, dificil)
-  created_at    timestamp
 
 review_history
   id            uuid pk
   flashcard_id  fk -> flashcards.id
   user_id       fk -> users.id
-  reviewed_at   timestamp
   rating        enum(errei, dificil, bom, facil)
-  stability     float   -- FSRS
-  difficulty    float   -- FSRS
+  stability     float
+  difficulty    float
   next_review   timestamp
 
 users
   id            uuid pk
   name          text
-  whatsapp_id   text
+  email         text unique (nullable)
+  whatsapp_id   text unique (nullable)
+  password_hash text (nullable)
   created_at    timestamp
 ```
 
-Esta seção deve ser expandida com constraints, índices e migrations reais assim que a Fase 1 começar.
+## 4. Pipeline de ingestao
 
-## 4. Pipeline de ingestão
-
-1. Upload do arquivo (qualquer formato suportado) → salvo no storage de objetos (R2).
-2. Job assíncrono (fila Redis) identifica o tipo e roteia:
-   - Imagem → OCR (TrOCR se manuscrito, Tesseract se impresso) → Markdown.
-   - PDF/DOC/CSV → `markitdown` (fallback `pandoc`) → Markdown.
-   - Áudio/vídeo → transcrição (Groq Whisper Turbo ou Whisper self-hosted) → Markdown.
-3. Markdown resultante é salvo como nova nota (`notes.content_md`), com `source_type` e `source_file` preenchidos.
-4. Nota é dividida em chunks (~300-500 tokens) → cada chunk vetorizado pelo modelo de embeddings local → salvo em `note_chunks`.
-5. Usuário revisa/ajusta tags e links manualmente ou aceita sugestões automáticas (extração de entidades/termos-chave via LLM, opcional na v1).
+1. Upload do arquivo → salvo no storage (S3 ou local dev)
+2. Job assincrono (Arq/Redis) identifica tipo e roteia:
+   - Imagem → OCR (Tesseract) → Markdown
+   - PDF/DOC/DOCX/CSV → markitdown → Markdown
+   - Audio/Video → Groq Whisper → Markdown
+3. Markdown salvo como nota (`notes.content_md`)
+4. Nota chunked → embeddings gerados → salvos em `note_chunks`
 
 ## 5. Pipeline de RAG
 
-1. Pergunta do usuário (chatbox ou WhatsApp) é vetorizada pelo mesmo modelo de embeddings.
-2. Busca por similaridade em `note_chunks` via pgvector (`ORDER BY embedding <-> query_embedding LIMIT k`).
-3. **Filtro de confiança**: se o melhor score de similaridade estiver abaixo do limiar configurado (valor inicial sugerido: 0.75, a calibrar), a resposta é a mensagem fixa de fallback — **sem** chamar o LLM.
-4. Chunks recuperados + system prompt restritivo ("responda apenas com base no contexto abaixo; se insuficiente, diga que não sabe") são enviados ao Groq.
-5. Resposta é retornada ao usuário, citando a nota de origem quando pertinente.
+1. Query vetorizada pelo modelo de embeddings (BAAI/bge-m3)
+2. Busca por similaridade cosseno em `note_chunks` via pgvector
+3. Filtro de confianca (threshold default 0.75) — sem LLM se abaixo
+4. Chunks + system prompt restritivo enviados ao Groq
+5. Resposta retornada com fontes dos chunks recuperados
 
-## 6. Geração de flashcards/testes
+## 6. Autenticacao
 
-- Entrada: uma ou mais `note_id` selecionadas + parâmetro de dificuldade + quantidade.
-- Prompt monta o conteúdo Markdown das notas selecionadas como contexto e instrui o modelo (Groq, modelo 70B para qualidade) a gerar N pares pergunta/resposta ou questões de múltipla escolha com gabarito e justificativa.
-- Cada flashcard gerado é persistido com `note_id` de origem (necessário para o resumo de reforço em caso de erro).
+- JWT (HS256) com python-jose + passlib (bcrypt)
+- Endpoints: POST /api/auth/register, POST /api/auth/login, GET /api/auth/me
+- Middleware opcional — endpoints funcionam sem auth, com suporte a bearer token
+- User model com email e password_hash para auth
 
-## 7. Motor de repetição espaçada (FSRS)
+## 7. Frontend
 
-- Biblioteca: `py-fsrs` (ou implementação equivalente).
-- Cada `review_history` atualiza `stability`, `difficulty` e calcula `next_review` com base na avaliação do usuário (errei/difícil/bom/fácil).
-- Consulta de "cards a revisar hoje" = `WHERE next_review <= now()`, usada tanto pelo chatbox quanto pelo bot de WhatsApp.
-- Exportação opcional para `.apkg` via `genanki`, sob demanda do usuário — não faz parte do fluxo principal.
+- Next.js 15 + React 19 + Tailwind CSS 4
+- shadcn/ui components (Button, Card, Input, Select, Tabs, Tooltip, Dialog, Badge, etc.)
+- Dark/Light theme toggle (next-themes)
+- Dashboard com graficos interativos (recharts: Pie, Bar)
+- Sidebar navigation com icones lucide-react
+- Toast notifications (sonner)
 
-## 8. Fluxo do bot de WhatsApp
+## 8. Motor de repeticao espacada (FSRS)
 
-```
-Usuário → "Quero treinar, crie 10 flashcards difíceis sobre X"
-  → NLU (Groq) extrai: assunto=X, quantidade=10, dificuldade=dificil
-  → Busca notas relacionadas a X (tag + embedding)
-  → Gera ou reaproveita flashcards existentes
-  → Envia flashcard 1/10
-Usuário → responde
-  → avaliação semântica da resposta (comparação com gabarito via LLM, não string exata)
-  → se errado: envia resumo curto da nota de origem
-  → registra review_history (atualiza FSRS)
-  → envia próximo flashcard
-  → repete até completar a sessão
-```
+- Biblioteca: py-fsrs
+- Cada review atualiza stability, difficulty, next_review
+- Cards a revisar = `WHERE next_review <= now()`
 
-## 9. Contratos de API (a detalhar por endpoint)
+## 9. Bot de WhatsApp
 
-Placeholder para a próxima revisão deste documento — cada endpoint deve documentar: método, path, payload de entrada, resposta, códigos de erro.
+- Baileys (WhatsApp Web API)
+- Sessao de estudo interativa com loop de Q&A
+- Avaliacao semantica de respostas via LLM
+- Comandos: "treinar"/"flashcard" inicia, "pular" avanca, "sair" encerra
 
-- `POST /notes` — cria nota
-- `POST /notes/import` — upload de arquivo para ingestão assíncrona
-- `GET /graph` — retorna nodes e edges para visualização
-- `POST /flashcards/generate` — gera flashcards a partir de notas selecionadas
-- `POST /chat` — mensagem para o chatbox interno
-- `POST /webhook/whatsapp` — recebe eventos da API do WhatsApp
+## 10. Contratos de API
 
-## 10. Variáveis de ambiente / segredos (a definir na Fase 1)
+| Metodo | Path | Descricao |
+|---|---|---|
+| POST | /api/auth/register | Registro de usuario |
+| POST | /api/auth/login | Login |
+| GET | /api/auth/me | Usuario atual |
+| POST | /api/notes | Criar nota |
+| GET | /api/notes | Listar notas |
+| GET | /api/notes/{id} | Obter nota |
+| PATCH | /api/notes/{id} | Atualizar nota |
+| DELETE | /api/notes/{id} | Deletar nota |
+| POST | /api/notes/import | Upload de arquivo |
+| GET | /api/notes/graph/data | Dados do grafo |
+| POST | /api/notes/{id}/link/{target} | Linkar notas |
+| DELETE | /api/notes/{id}/link/{target} | Deslinkar |
+| GET | /api/notes/tags | Listar tags |
+| POST | /api/flashcards/generate | Gerar flashcards |
+| GET | /api/flashcards | Listar flashcards |
+| GET | /api/flashcards/due | Cards para revisao |
+| POST | /api/flashcards/review | Submeter revisao |
+| DELETE | /api/flashcards/{id} | Deletar flashcard |
+| POST | /api/chat | Chat RAG |
+| GET | /api/health | Health check |
+| GET | /api/settings | Configuracoes do sistema |
 
-- `DATABASE_URL`
-- `REDIS_URL`
-- `GROQ_API_KEY`
-- `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID`
-- `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY`
-- `SIMILARITY_THRESHOLD` (parametrizável, não hardcoded)
+## 11. Variaveis de ambiente
 
-## 11. Pontos em aberto (a resolver em versões futuras deste SPEC)
+- DATABASE_URL, REDIS_URL
+- GROQ_API_KEY
+- S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION
+- SECRET_KEY, CORS_ORIGINS, ENVIRONMENT
+- SIMILARITY_THRESHOLD, EMBEDDING_MODEL, CHUNK_SIZE, CHUNK_OVERLAP
+- DEV_USE_LOCAL_STORAGE, LOCAL_STORAGE_PATH
+- BACKEND_URL, FRONTEND_URL
 
-- Dimensão exata do vetor de embeddings (depende do modelo escolhido — definir na Fase 1).
-- Estratégia de chunking definitiva (tamanho fixo vs. por seção Markdown).
-- Definição do modelo de embeddings final (bge-m3 vs. multilingual-e5 vs. outro).
-- Decisão definitiva WhatsApp: Cloud API oficial desde o início vs. Baileys no MVP com migração planejada.
-- Esquema de autenticação de usuários (a especificar).
+## 12. Testes
+
+- Backend: pytest + pytest-asyncio + httpx (AsyncClient)
+- Testes de API: health, CRUD de notas, tags, grafo, chat, auth
+- Frontend: Next.js build com checagem de tipos
+- Executar: `cd backend && pytest tests/ -v`

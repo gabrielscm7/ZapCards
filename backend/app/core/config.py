@@ -44,5 +44,8 @@ class Settings(BaseSettings):
     BACKEND_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
 
+    DEV_USE_LOCAL_STORAGE: bool = False
+    LOCAL_STORAGE_PATH: str = "./uploads"
+
 
 settings = Settings()

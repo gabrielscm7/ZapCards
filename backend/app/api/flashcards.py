@@ -26,10 +26,12 @@ async def generate(payload: FlashcardGenerate, db: AsyncSession = Depends(get_db
     content = "\n\n".join(f"# {n.title}\n{n.content_md}" for n in notes)
     pairs = await generate_flashcards(content, payload.difficulty, payload.quantity)
 
+    note_count = len(notes)
     cards = []
-    for q, a in pairs:
+    for i, (q, a) in enumerate(pairs):
+        note = notes[i % note_count]
         card = Flashcard(
-            note_id=notes[0].id,
+            note_id=note.id,
             question=q,
             answer=a,
             difficulty=payload.difficulty,

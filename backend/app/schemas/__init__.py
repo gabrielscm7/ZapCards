@@ -1,6 +1,7 @@
 from app.schemas.note import NoteCreate, NoteOut, NoteUpdate, TagOut
 from app.schemas.flashcard import FlashcardGenerate, FlashcardOut, ReviewOut, ReviewSubmit
 from app.schemas.chat import ChatMessage, ChatResponse, ImportResult
+from app.schemas.auth import TokenResponse, LoginRequest, UserCreate, UserOut
 
 __all__ = [
     "NoteCreate",
@@ -14,4 +15,8 @@ __all__ = [
     "ChatMessage",
     "ChatResponse",
     "ImportResult",
+    "TokenResponse",
+    "LoginRequest",
+    "UserCreate",
+    "UserOut",
 ]
