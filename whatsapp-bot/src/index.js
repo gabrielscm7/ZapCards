@@ -1,19 +1,17 @@
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
 import pino from "pino";
 import fs from "fs";
 import QRCode from "qrcode";
 
 const logger = pino({ level: "info" });
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const PHONE_NUMBER = process.env.WHATSAPP_PHONE_NUMBER || "";
 
 const studySessions = new Map();
 
 function saveQrImage(qr) {
   try {
-    const filepath = "/tmp/zapcards-qr.png";
-    QRCode.toFile(filepath, qr, { width: 400, margin: 2 }, (err) => {
-      if (!err) logger.info({ filepath }, "QR code image saved to %s", filepath);
-    });
+    QRCode.toFile("/tmp/zapcards-qr.png", qr, { width: 400, margin: 2 }, () => {});
   } catch {}
 }
 
@@ -32,30 +30,48 @@ async function connectToWhatsApp() {
 
   sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      logger.info("=== NOVO QR CODE GERADO ===");
+      logger.info("========================================");
+      logger.info("  ZapCards WhatsApp Bot — Autenticacao  ");
+      logger.info("========================================");
+
       saveQrImage(qr);
 
       try {
         const smallQr = await QRCode.toString(qr, { type: "terminal", small: true });
-        logger.info("QR Code (terminal):\n%s", smallQr);
-      } catch {
-        logger.info("QR Code (raw, copie e cole em https://www.qr-code-generator.com): %s", qr);
+        logger.info("QR Code (escaneie com WhatsApp):\n%s", smallQr);
+      } catch (err) {
+        logger.info("QR raw: %s (cole em https://www.qr-code-generator.com)", qr);
       }
 
-      logger.info("=== Fim do QR Code ===");
+      if (PHONE_NUMBER) {
+        try {
+          const code = await sock.requestPairingCode(PHONE_NUMBER);
+          logger.info("Pairing code enviado para %s: %s", PHONE_NUMBER, code);
+          logger.info("Se o QR nao funcionar, use o codigo numerico acima no WhatsApp");
+        } catch (err) {
+          logger.info("Pairing code indisponivel. Use o QR code acima.");
+        }
+      } else {
+        logger.info("Defina WHATSAPP_PHONE_NUMBER para receber codigo numerico via SMS.");
+      }
+
+      logger.info("========================================");
     }
 
     if (connection === "close") {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      logger.info({ statusCode, shouldReconnect }, "Conexao fechada");
+      logger.info({ statusCode, shouldReconnect }, "Conexao fechada — reconectando em 5s");
       if (shouldReconnect) {
         setTimeout(connectToWhatsApp, 5000);
       } else {
-        logger.info("Sessao encerrada. Delete 'auth_info' para gerar novo QR code.");
+        logger.info("Sessao encerrada. Delete 'auth_info' e reinicie.");
       }
     } else if (connection === "open") {
-      logger.info("ZapCards bot conectado e pronto!");
+      logger.info("========================================");
+      logger.info("  ZapCards WhatsApp Bot CONECTADO!      ");
+      logger.info("  Envie 'treinar' para iniciar estudos  ");
+      logger.info("========================================");
     }
   });
 
@@ -134,53 +150,33 @@ async function startStudySession(sock, jid, command) {
     };
 
     studySessions.set(jid, session);
-
-    await sock.sendMessage(jid, {
-      text: `*Sessao de Estudos*\n\n${session.cards.length} flashcards prontos!\nVou enviar um de cada vez. Responda cada pergunta.\n\nDigite *pular* para avancar.\nDigite *sair* para encerrar.\n\n*Flashcard ${session.currentIndex + 1}/${session.cards.length}:*\n\n${session.cards[0].question}`,
-    });
-
-    session.questionShown = true;
+    await sendNextCard(sock, jid, session);
   } catch (err) {
     logger.error(err);
-    await sock.sendMessage(jid, { text: "Erro ao carregar flashcards. Verifique se o backend esta rodando." });
+    await sock.sendMessage(jid, { text: "Erro ao carregar flashcards." });
   }
+}
+
+function sendNextCard(sock, jid, session) {
+  if (session.currentIndex >= session.cards.length) {
+    studySessions.delete(jid);
+    return sock.sendMessage(jid, {
+      text: "*Sessao concluida!*\n\nVoce revisou todos os flashcards. Otimo trabalho!\n\nDigite *treinar* para estudar novamente.",
+    });
+  }
+
+  session.questionShown = true;
+  return sock.sendMessage(jid, {
+    text: `*Flashcard ${session.currentIndex + 1}/${session.cards.length}:*\n\n${session.cards[session.currentIndex].question}\n\n_Digite sua resposta ou *pular* para avancar_`,
+  });
 }
 
 async function handleStudyAnswer(sock, jid, text, session) {
   if (text.toLowerCase() === "pular") {
     session.currentIndex++;
     session.questionShown = false;
-
-    if (session.currentIndex >= session.cards.length) {
-      studySessions.delete(jid);
-      await sock.sendMessage(jid, {
-        text: "*Sessao concluida!*\n\nVoce revisou todos os flashcards. Otimo trabalho!\n\nDigite *treinar* para estudar novamente.",
-      });
-      return;
-    }
-
-    await sock.sendMessage(jid, {
-      text: `*Pulado!*\n\n*Flashcard ${session.currentIndex + 1}/${session.cards.length}:*\n\n${session.cards[session.currentIndex].question}`,
-    });
-    session.questionShown = true;
-    return;
-  }
-
-  if (!session.questionShown) {
-    session.currentIndex++;
-    session.questionShown = false;
-
-    if (session.currentIndex >= session.cards.length) {
-      studySessions.delete(jid);
-      await sock.sendMessage(jid, { text: "*Sessao concluida!* Otimo trabalho!\n\nDigite *treinar* para estudar novamente." });
-      return;
-    }
-
-    await sock.sendMessage(jid, {
-      text: `*Flashcard ${session.currentIndex + 1}/${session.cards.length}:*\n\n${session.cards[session.currentIndex].question}`,
-    });
-    session.questionShown = true;
-    return;
+    await sock.sendMessage(jid, { text: "*Pulado!*" });
+    return sendNextCard(sock, jid, session);
   }
 
   const card = session.cards[session.currentIndex];
@@ -190,46 +186,26 @@ async function handleStudyAnswer(sock, jid, text, session) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        content: `Compare minha resposta com o gabarito e me diga se esta correta.\n\nGabarito: ${card.answer}\n\nMinha resposta: ${text}\n\nResponda apenas: CORRETO ou INCORRETO, seguido de um breve feedback.`,
+        content: `Compare minha resposta com o gabarito e me diga se esta correta. Responda apenas: CORRETO ou INCORRETO, seguido de um breve feedback.\n\nGabarito: ${card.answer}\n\nMinha resposta: ${text}`,
       }),
     });
     const evalData = await evalRes.json();
     const feedback = evalData.content || "Recebido!";
 
     await sock.sendMessage(jid, {
-      text: `*Resposta:*\n${text.slice(0, 200)}\n\n*Gabarito:*\n${card.answer.slice(0, 300)}\n\n*Feedback:*\n${feedback}`,
+      text: `*Sua resposta:* ${text.slice(0, 150)}\n\n*Gabarito:* ${card.answer.slice(0, 250)}\n\n*Feedback:* ${feedback}`,
     });
 
     session.currentIndex++;
-
-    if (session.currentIndex >= session.cards.length) {
-      studySessions.delete(jid);
-      await sock.sendMessage(jid, {
-        text: "*Sessao concluida!*\n\nVoce revisou todos os flashcards.\n\nDigite *treinar* para estudar novamente.",
-      });
-      return;
-    }
+    session.questionShown = false;
 
     await new Promise((r) => setTimeout(r, 1500));
-
-    await sock.sendMessage(jid, {
-      text: `*Flashcard ${session.currentIndex + 1}/${session.cards.length}:*\n\n${session.cards[session.currentIndex].question}`,
-    });
-    session.questionShown = true;
+    return sendNextCard(sock, jid, session);
   } catch (err) {
     logger.error(err);
     session.currentIndex++;
     session.questionShown = false;
-
-    if (session.currentIndex >= session.cards.length) {
-      studySessions.delete(jid);
-      await sock.sendMessage(jid, { text: "Sessao concluida! Digite *treinar* para estudar novamente." });
-    } else {
-      await sock.sendMessage(jid, {
-        text: `*Flashcard ${session.currentIndex + 1}/${session.cards.length}:*\n\n${session.cards[session.currentIndex].question}`,
-      });
-      session.questionShown = true;
-    }
+    return sendNextCard(sock, jid, session);
   }
 }
 

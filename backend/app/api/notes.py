@@ -6,8 +6,16 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.models.note import Note, Tag, NoteLink
 from app.schemas.note import NoteCreate, NoteOut, NoteUpdate, TagOut
+from app.services.embed import schedule_embeddings
 
 router = APIRouter()
+
+
+async def _trigger_embeddings(note_id: str):
+    try:
+        await schedule_embeddings(note_id)
+    except Exception:
+        pass
 
 
 @router.post("", response_model=NoteOut, status_code=201)
@@ -25,6 +33,7 @@ async def create_note(payload: NoteCreate, db: AsyncSession = Depends(get_db)):
     db.add(note)
     await db.flush()
     await db.refresh(note)
+    await _trigger_embeddings(str(note.id))
     return note
 
 
@@ -78,6 +87,7 @@ async def update_note(note_id: str, payload: NoteUpdate, db: AsyncSession = Depe
         note.tags = list(existing.values())
     await db.flush()
     await db.refresh(note)
+    await _trigger_embeddings(str(note.id))
     return note
 
 
