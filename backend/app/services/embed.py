@@ -1,3 +1,5 @@
+import json
+
 from sentence_transformers import SentenceTransformer
 
 from app.core.config import settings
@@ -22,8 +24,13 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     return model.encode(texts).tolist()
 
 
+def _to_embedding_str(embedding: list[float]) -> str:
+    return json.dumps(embedding)
+
+
 async def search_similar(db, query_embedding: list[float], limit: int = 5) -> list[tuple[str, float]]:
     from sqlalchemy import text
+    embedding_str = _to_embedding_str(query_embedding)
     result = await db.execute(
         text(
             """SELECT nc.content, 1 - (nc.embedding <=> :embedding) AS similarity
@@ -32,6 +39,6 @@ async def search_similar(db, query_embedding: list[float], limit: int = 5) -> li
                ORDER BY nc.embedding <=> :embedding
                LIMIT :limit"""
         ),
-        {"embedding": query_embedding, "limit": limit},
+        {"embedding": embedding_str, "limit": limit},
     )
     return [(row[0], row[1]) for row in result.fetchall()]

@@ -1,4 +1,7 @@
-from pydantic import BaseModel
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, field_serializer
 
 
 class FlashcardGenerate(BaseModel):
@@ -15,6 +18,16 @@ class FlashcardOut(BaseModel):
     difficulty: str
     created_at: str
     model_config = {"from_attributes": True}
+
+    @field_serializer("id", "note_id")
+    def _serialize_id(self, value: uuid.UUID | str) -> str:
+        return str(value)
+
+    @field_serializer("created_at")
+    def _serialize_datetime(self, value: datetime | str) -> str:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
 
 
 class ReviewSubmit(BaseModel):
@@ -33,3 +46,13 @@ class ReviewOut(BaseModel):
     difficulty: float
     next_review: str
     model_config = {"from_attributes": True}
+
+    @field_serializer("id", "flashcard_id", "user_id")
+    def _serialize_id(self, value: uuid.UUID | str) -> str:
+        return str(value)
+
+    @field_serializer("reviewed_at", "next_review")
+    def _serialize_datetime(self, value: datetime | str) -> str:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
