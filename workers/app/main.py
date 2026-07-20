@@ -14,7 +14,7 @@ async def process_ocr(ctx, note_id: str, file_key: str):
     from PIL import Image
     import pytesseract
 
-    s3 = boto3.client("s3", endpoint_url=f"https://{s.S3_ENDPOINT}" if s.S3_ENDPOINT else None,
+    s3 = boto3.client("s3", endpoint_url=s.S3_ENDPOINT or None,
                       aws_access_key_id=s.S3_ACCESS_KEY, aws_secret_access_key=s.S3_SECRET_KEY)
 
     obj = s3.get_object(Bucket=s.S3_BUCKET, Key=file_key)
@@ -30,7 +30,7 @@ async def process_pdf(ctx, note_id: str, file_key: str):
     from markitdown import MarkItDown
     from app.core.config import settings as s
 
-    s3 = boto3.client("s3", endpoint_url=f"https://{s.S3_ENDPOINT}" if s.S3_ENDPOINT else None,
+    s3 = boto3.client("s3", endpoint_url=s.S3_ENDPOINT or None,
                       aws_access_key_id=s.S3_ACCESS_KEY, aws_secret_access_key=s.S3_SECRET_KEY)
 
     obj = s3.get_object(Bucket=s.S3_BUCKET, Key=file_key)
@@ -48,7 +48,7 @@ async def process_audio(ctx, note_id: str, file_key: str):
 
     client = Groq(api_key=s.GROQ_API_KEY)
 
-    s3_client = boto3.client("s3", endpoint_url=f"https://{s.S3_ENDPOINT}" if s.S3_ENDPOINT else None,
+    s3_client = boto3.client("s3", endpoint_url=s.S3_ENDPOINT or None,
                              aws_access_key_id=s.S3_ACCESS_KEY, aws_secret_access_key=s.S3_SECRET_KEY)
 
     obj = s3_client.get_object(Bucket=s.S3_BUCKET, Key=file_key)

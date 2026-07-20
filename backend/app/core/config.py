@@ -1,4 +1,13 @@
+import re
+
 from pydantic_settings import BaseSettings
+
+
+def _normalize_database_url(url: str) -> str:
+    if url.startswith("postgresql+asyncpg://") or url.startswith("postgresql+psycopg://"):
+        return url
+    url = re.sub(r"^postgres(ql)?://", "postgresql+asyncpg://", url)
+    return url
 
 
 class Settings(BaseSettings):
@@ -6,6 +15,10 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/zapcards"
     REDIS_URL: str = "redis://localhost:6379/0"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.DATABASE_URL = _normalize_database_url(self.DATABASE_URL)
 
     GROQ_API_KEY: str = ""
 
@@ -18,6 +31,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production"
     CORS_ORIGINS: str = "http://localhost:3000"
     ENVIRONMENT: str = "development"
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT == "production"
 
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
     SIMILARITY_THRESHOLD: float = 0.75

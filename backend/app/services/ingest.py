@@ -1,14 +1,18 @@
+import logging
 import os
 import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import UploadFile
+from botocore.exceptions import ClientError, EndpointConnectionError
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.s3 import get_s3_client, get_s3_public_url
 from app.core.config import settings
 from app.models.note import Note
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".webp",
@@ -33,7 +37,14 @@ async def ingest_file(file: UploadFile, area: str, db: AsyncSession) -> Note:
     content = await file.read()
 
     s3 = get_s3_client()
-    s3.put_object(Bucket=settings.S3_BUCKET, Key=file_key, Body=content)
+    try:
+        s3.put_object(Bucket=settings.S3_BUCKET, Key=file_key, Body=content)
+    except (ClientError, EndpointConnectionError) as e:
+        logger.error("S3 upload failed: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Servico de armazenamento indisponivel. Verifique a configuracao S3_ENDPOINT.",
+        )
 
     source_type = EXTENSION_TO_TYPE.get(ext, "text")
     title = Path(file.filename or "nota").stem
