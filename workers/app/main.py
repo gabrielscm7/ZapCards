@@ -7,26 +7,61 @@ import sys
 from arq import create_pool
 from arq.connections import RedisSettings
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("zapcards-workers")
 
-from app.core.config import settings
-from app.core.s3 import get_file, save_file
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/zapcards")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "")
+S3_BUCKET = os.environ.get("S3_BUCKET", "zapcards-files")
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
+S3_REGION = os.environ.get("S3_REGION", "auto")
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "500"))
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-m3")
 
-logger = logging.getLogger(__name__)
-
-ARQ_SETTINGS = RedisSettings.from_dsn(settings.REDIS_URL)
+ARQ_SETTINGS = RedisSettings.from_dsn(REDIS_URL)
 
 
-async def _update_note_in_db(ctx, note_id: str, content: str):
-    from sqlalchemy import update
-    from app.core.database import async_session
-    from app.models.note import Note
+def get_file(key: str) -> bytes | None:
+    if S3_ENDPOINT:
+        import boto3
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=S3_ENDPOINT,
+            aws_access_key_id=S3_ACCESS_KEY,
+            aws_secret_access_key=S3_SECRET_KEY,
+            region_name=S3_REGION,
+        )
+        try:
+            obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+            return obj["Body"].read()
+        except Exception as e:
+            logger.error("S3 get failed: %s", e)
+            return None
+    else:
+        filepath = os.path.join("./uploads", key)
+        if os.path.exists(filepath):
+            with open(filepath, "rb") as f:
+                return f.read()
+        return None
 
-    async with async_session() as db:
+
+async def update_note_content(ctx, note_id: str, content: str):
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession, create_async_engine
+
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with session_factory() as db:
         await db.execute(
-            update(Note).where(Note.id == note_id).values(content_md=content)
+            text("UPDATE notes SET content_md = :content WHERE id = CAST(:id AS uuid)"),
+            {"content": content, "id": note_id},
         )
         await db.commit()
+    await engine.dispose()
 
     await ctx["redis"].enqueue_job("generate_embeddings", note_id)
     logger.info("Updated note %s, enqueued embedding job", note_id)
@@ -75,7 +110,7 @@ async def process_audio(ctx, note_id: str, file_key: str):
         logger.error("File not found: %s", file_key)
         return
 
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = Groq(api_key=GROQ_API_KEY)
     transcript = client.audio.transcriptions.create(
         model="whisper-large-v3-turbo",
         file=(os.path.basename(file_key), data),
@@ -89,43 +124,44 @@ async def process_audio(ctx, note_id: str, file_key: str):
 
 
 async def generate_embeddings(ctx, note_id: str):
-    from sqlalchemy import select
-    from app.core.database import async_session
-    from app.models.note import Note, NoteChunk
-    from app.services.embed import embed_texts
-    from app.core.config import settings as s
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession, create_async_engine
+    from sentence_transformers import SentenceTransformer
 
-    async with async_session() as db:
-        result = await db.execute(select(Note).where(Note.id == note_id))
-        note = result.scalar_one_or_none()
-        if not note:
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    model = SentenceTransformer(EMBEDDING_MODEL)
+
+    async with session_factory() as db:
+        result = await db.execute(text("SELECT content_md FROM notes WHERE id = CAST(:id AS uuid)"), {"id": note_id})
+        row = result.fetchone()
+        if not row or not row[0]:
+            await engine.dispose()
             return
 
-        existing = await db.execute(
-            select(NoteChunk).where(NoteChunk.note_id == note_id)
-        )
-        for chunk in existing.scalars().all():
-            await db.delete(chunk)
+        content = row[0]
 
-        content = note.content_md
+        await db.execute(text("DELETE FROM note_chunks WHERE note_id = CAST(:id AS uuid)"), {"id": note_id})
+
         words = content.split()
-        chunks = []
-        for i in range(0, len(words), s.CHUNK_SIZE):
-            chunk_text = " ".join(words[i : i + s.CHUNK_SIZE])
+        embed_data = []
+        for i in range(0, len(words), CHUNK_SIZE):
+            chunk_text = " ".join(words[i : i + CHUNK_SIZE])
             if chunk_text.strip():
-                chunks.append(NoteChunk(note_id=note_id, content=chunk_text))
+                embed_data.append(chunk_text)
 
-        if chunks:
-            embeddings = await embed_texts([c.content for c in chunks])
-            for c, emb in zip(chunks, embeddings):
-                c.embedding = emb
-            db.add_all(chunks)
+        if embed_data:
+            embeddings = model.encode(embed_data).tolist()
+            for chunk_text, emb in zip(embed_data, embeddings):
+                await db.execute(
+                    text("INSERT INTO note_chunks (note_id, content, embedding) VALUES (CAST(:nid AS uuid), :content, :emb::vector)"),
+                    {"nid": note_id, "content": chunk_text, "emb": json.dumps(emb)},
+                )
             await db.commit()
-            logger.info("Generated %d embeddings for note %s", len(chunks), note_id)
+            logger.info("Generated %d embeddings for note %s", len(embed_data), note_id)
 
-
-async def update_note_content(ctx, note_id: str, content: str):
-    await _update_note_in_db(ctx, note_id, content)
+    await engine.dispose()
 
 
 class WorkerSettings:
