@@ -1,13 +1,12 @@
 import asyncio
 import logging
 
-from arq import create_pool
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.redis import ARQ_SETTINGS
+from app.core.redis import get_redis, get_redis_settings_safe
 from app.schemas.chat import ImportResult
 from app.services.ingest import ingest_file
 
@@ -34,11 +33,9 @@ async def import_file(file: UploadFile, area: str = "", db: AsyncSession = Depen
     job_name = JOB_MAP.get(note.source_type)
     if job_name:
         try:
-            pool = await create_pool(ARQ_SETTINGS)
+            pool = await get_redis()
             await pool.enqueue_job(job_name, str(note.id), note.source_file)
-            await asyncio.sleep(0.1)
-            await pool.close()
-            logger.info("Enqueued %s job for note %s (file %s)", job_name, note.id, note.source_file)
+            logger.info("Enqueued %s job for note %s", job_name, note.id)
         except Exception as e:
             logger.warning("Could not enqueue worker job %s: %s", job_name, e)
 
