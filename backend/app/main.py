@@ -60,3 +60,37 @@ async def health():
         "service": "zapcards-backend",
         "database": "connected" if db_ok else "unavailable",
     }
+
+
+@app.get("/api/embeddings/stats")
+async def embeddings_stats():
+    from sqlalchemy import text
+    from app.core.database import async_session
+    async with async_session() as db:
+        total_emb = await db.execute(text("SELECT COUNT(*) FROM note_chunks WHERE embedding IS NOT NULL"))
+        total_notes = await db.execute(text("SELECT COUNT(*) FROM notes"))
+        total_chunks = await db.execute(text("SELECT COUNT(*) FROM note_chunks"))
+        return {
+            "notes_total": total_notes.scalar(),
+            "chunks_total": total_chunks.scalar(),
+            "chunks_with_embeddings": total_emb.scalar(),
+        }
+
+
+@app.get("/api/embeddings/generate-all")
+async def embeddings_generate_all():
+    import asyncio
+    from sqlalchemy import text
+    from app.core.database import async_session
+    async with async_session() as db:
+        result = await db.execute(text("SELECT id FROM notes"))
+        note_ids = [str(row[0]) for row in result.fetchall()]
+    from app.services.embed import schedule_embeddings
+    count = 0
+    for nid in note_ids:
+        try:
+            asyncio.ensure_future(schedule_embeddings(nid))
+            count += 1
+        except Exception:
+            pass
+    return {"status": "ok", "enqueued": count, "total": len(note_ids)}
