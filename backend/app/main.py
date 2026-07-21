@@ -79,18 +79,18 @@ async def embeddings_stats():
 
 @app.get("/api/embeddings/generate-all")
 async def embeddings_generate_all():
-    import asyncio
     from sqlalchemy import text
     from app.core.database import async_session
+    from app.services.embed import schedule_embeddings
     async with async_session() as db:
         result = await db.execute(text("SELECT id FROM notes"))
         note_ids = [str(row[0]) for row in result.fetchall()]
-    from app.services.embed import schedule_embeddings
-    count = 0
+    ok = 0
+    fail = 0
     for nid in note_ids:
         try:
-            asyncio.ensure_future(schedule_embeddings(nid))
-            count += 1
-        except Exception:
-            pass
-    return {"status": "ok", "enqueued": count, "total": len(note_ids)}
+            await schedule_embeddings(nid)
+            ok += 1
+        except Exception as e:
+            fail += 1
+    return {"status": "ok", "ok": ok, "failed": fail, "total": len(note_ids)}

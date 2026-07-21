@@ -48,22 +48,11 @@ async def search_similar(db, query_embedding: list[float], limit: int = 5) -> li
 
 
 async def schedule_embeddings(note_id: str):
-    enqueued = False
+    logger.info("[EMBED] starting sync generation for note %s", note_id[:8])
     try:
-        from app.core.redis import get_redis
-        pool = await get_redis()
-        await pool.enqueue_job("generate_embeddings", note_id)
-        enqueued = True
-        logger.info("[EMBED] note %s enqueued to Redis", note_id[:8])
+        await _generate_embeddings_sync(note_id)
     except Exception as e:
-        logger.warning("[EMBED] Redis enqueue failed for note %s: %s", note_id[:8], str(e)[:120])
-
-    if not enqueued:
-        logger.info("[EMBED] note %s — falling back to sync generation", note_id[:8])
-        try:
-            await _generate_embeddings_sync(note_id)
-        except Exception as e:
-            logger.error("[EMBED] sync generation failed for note %s: %s", note_id[:8], str(e)[:200])
+        logger.error("[EMBED] generation FAILED for note %s: %s", note_id[:8], str(e)[:300])
 
 
 async def _generate_embeddings_sync(note_id: str):
