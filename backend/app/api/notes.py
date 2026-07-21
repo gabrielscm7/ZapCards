@@ -70,6 +70,21 @@ async def get_graph(tag: str | None = Query(None), area: str | None = Query(None
     return {"nodes": nodes, "edges": edges}
 
 
+@router.post("/embeddings/generate-all", status_code=202)
+async def generate_all_embeddings(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import text
+    result = await db.execute(text("SELECT id FROM notes"))
+    note_ids = [row[0] for row in result.fetchall()]
+    count = 0
+    for nid in note_ids:
+        try:
+            _trigger_embeddings_background(str(nid))
+            count += 1
+        except Exception:
+            pass
+    return {"status": "ok", "enqueued": count, "total": len(note_ids)}
+
+
 @router.get("/stats/embeddings")
 async def embeddings_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import text

@@ -48,14 +48,22 @@ async def search_similar(db, query_embedding: list[float], limit: int = 5) -> li
 
 
 async def schedule_embeddings(note_id: str):
+    enqueued = False
     try:
         from app.core.redis import get_redis
         pool = await get_redis()
         await pool.enqueue_job("generate_embeddings", note_id)
-        logger.info("Enqueued embedding job for note %s via Redis", note_id)
-    except Exception:
-        logger.warning("Redis unavailable, generating embeddings synchronously for note %s", note_id)
-        await _generate_embeddings_sync(note_id)
+        enqueued = True
+        logger.info("[EMBED] note %s enqueued to Redis", note_id[:8])
+    except Exception as e:
+        logger.warning("[EMBED] Redis enqueue failed for note %s: %s", note_id[:8], str(e)[:120])
+
+    if not enqueued:
+        logger.info("[EMBED] note %s — falling back to sync generation", note_id[:8])
+        try:
+            await _generate_embeddings_sync(note_id)
+        except Exception as e:
+            logger.error("[EMBED] sync generation failed for note %s: %s", note_id[:8], str(e)[:200])
 
 
 async def _generate_embeddings_sync(note_id: str):
@@ -70,23 +78,35 @@ async def _generate_embeddings_sync(note_id: str):
         result = await db.execute(select(Note).where(Note.id == nid))
         note = result.scalar_one_or_none()
         if not note or not note.content_md.strip():
+            logger.warning("[EMBED] note %s not found or empty", note_id[:8])
             return
+
+        content = note.content_md
+        logger.info("[EMBED] note %s — %d chars, generating chunks...", note_id[:8], len(content))
 
         existing = await db.execute(select(NoteChunk).where(NoteChunk.note_id == nid))
         for chunk in existing.scalars().all():
             await db.delete(chunk)
 
-        words = note.content_md.split()
+        words = content.split()
         chunks = []
         for i in range(0, len(words), settings.CHUNK_SIZE):
             chunk_text = " ".join(words[i : i + settings.CHUNK_SIZE])
             if chunk_text.strip():
                 chunks.append(NoteChunk(note_id=nid, content=chunk_text))
 
+        logger.info("[EMBED] note %s — %d chunks, generating vectors...", note_id[:8], len(chunks))
+
         if chunks:
-            embeddings = await embed_texts([c.content for c in chunks])
-            for c, emb in zip(chunks, embeddings):
-                c.embedding = emb
-            db.add_all(chunks)
-            await db.commit()
-            logger.info("Generated %d embeddings synchronously for note %s", len(chunks), note_id)
+            try:
+                embeddings = await embed_texts([c.content for c in chunks])
+                for c, emb in zip(chunks, embeddings):
+                    c.embedding = emb
+                db.add_all(chunks)
+                await db.commit()
+                logger.info("[EMBED] note %s — %d embeddings stored OK", note_id[:8], len(chunks))
+            except Exception as e:
+                logger.error("[EMBED] model error for note %s: %s", note_id[:8], str(e)[:200])
+                raise
+        else:
+            logger.warning("[EMBED] note %s — no chunks generated", note_id[:8])
