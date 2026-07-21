@@ -97,6 +97,19 @@ async function connectToWhatsApp() {
 
       if (text.toLowerCase().includes("treinar") || text.toLowerCase().includes("flashcard")) {
         await handleStudyCommand(sock, jid, text);
+      } else if (
+        text.toLowerCase() === "notas" ||
+        text.toLowerCase().startsWith("listar") ||
+        text.toLowerCase() === "minhas notas"
+      ) {
+        await handleListNotes(sock, jid);
+      } else if (
+        text.toLowerCase().startsWith("nota ") ||
+        text.toLowerCase().startsWith("ler ") ||
+        text.toLowerCase().startsWith("ver ") ||
+        text.toLowerCase().startsWith("abrir ")
+      ) {
+        await handleReadNote(sock, jid, text);
       } else {
         try {
           const res = await fetch(`${BACKEND_URL}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: text }) });
@@ -106,6 +119,94 @@ async function connectToWhatsApp() {
       }
     }
   });
+}
+
+async function handleListNotes(sock, jid) {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/notes`);
+    const notes = await res.json();
+
+    if (!notes.length) {
+      await sock.sendMessage(jid, { text: "Nenhuma nota encontrada. Crie notas no ZapCards!" });
+      return;
+    }
+
+    const lines = notes.map((n, i) =>
+      `${i + 1}. *${n.title || "Sem titulo"}*${n.area ? ` [${n.area}]` : ""}\n   Tags: ${n.tags?.map(t => t.name).join(", ") || "nenhuma"}`
+    );
+
+    const chunks = [];
+    let current = "*Suas Notas:*\n\n";
+    for (const line of lines) {
+      if ((current + line).length > 3800) {
+        chunks.push(current);
+        current = line + "\n";
+      } else {
+        current += line + "\n";
+      }
+    }
+    if (current.trim()) chunks.push(current);
+
+    for (const chunk of chunks) {
+      await sock.sendMessage(jid, { text: chunk });
+    }
+
+    await sock.sendMessage(jid, { text: "Envie *ler <numero>* ou *ver <titulo>* para abrir uma nota." });
+  } catch {
+    await sock.sendMessage(jid, { text: "Erro ao buscar notas." });
+  }
+}
+
+async function handleReadNote(sock, jid, text) {
+  try {
+    let query = text.replace(/^(nota|ler|ver|abrir)\s+/i, "").trim();
+
+    if (/^\d+$/.test(query)) {
+      const res = await fetch(`${BACKEND_URL}/api/notes`);
+      const notes = await res.json();
+      const idx = parseInt(query) - 1;
+      if (idx < 0 || idx >= notes.length) {
+        await sock.sendMessage(jid, { text: "Numero invalido. Use *notas* para ver a lista." });
+        return;
+      }
+      query = notes[idx].id;
+    } else {
+      const searchRes = await fetch(`${BACKEND_URL}/api/notes?search=${encodeURIComponent(query)}`);
+      const searchNotes = await searchRes.json();
+      if (!searchNotes.length) {
+        await sock.sendMessage(jid, { text: `Nota "${query}" nao encontrada.` });
+        return;
+      }
+      query = searchNotes[0].id;
+    }
+
+    const noteRes = await fetch(`${BACKEND_URL}/api/notes/${query}`);
+    if (!noteRes.ok) { await sock.sendMessage(jid, { text: "Nota nao encontrada." }); return; }
+
+    const note = await noteRes.json();
+    const content = note.content_md || "(vazio)";
+
+    const sendChunks = (str, prefix) => {
+      const chunks = [];
+      for (let i = 0; i < str.length; i += 3800) {
+        chunks.push(str.slice(i, i + 3800));
+      }
+      return chunks;
+    };
+
+    await sock.sendMessage(jid, { text: `*${note.title || "Sem titulo"}*${note.area ? ` [${note.area}]` : ""}\n` });
+
+    const parts = sendChunks(content);
+    for (const part of parts) {
+      await sock.sendMessage(jid, { text: part });
+    }
+
+    if (note.tags?.length) {
+      await sock.sendMessage(jid, { text: `Tags: ${note.tags.map(t => t.name).join(", ")}` });
+    }
+  } catch {
+    await sock.sendMessage(jid, { text: "Erro ao ler nota." });
+  }
 }
 
 async function handleStudyCommand(sock, jid, text) {
