@@ -70,7 +70,7 @@ async def get_graph(tag: str | None = Query(None), area: str | None = Query(None
     return {"nodes": nodes, "edges": edges}
 
 
-@router.post("/embeddings/generate-all", status_code=202)
+@router.get("/generate-embeddings-all")
 async def generate_all_embeddings(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import text
     result = await db.execute(text("SELECT id FROM notes"))
