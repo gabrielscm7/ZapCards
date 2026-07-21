@@ -17,10 +17,12 @@ import {
   Sun,
   Moon,
   Zap,
+  Library,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/biblioteca", label: "Biblioteca", icon: Library },
   { href: "/notes", label: "Notas", icon: FileText },
   { href: "/graph", label: "Grafo", icon: GitGraph },
   { href: "/flashcards", label: "Flashcards", icon: Brain },
