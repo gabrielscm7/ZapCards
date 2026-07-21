@@ -1,4 +1,4 @@
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from "@whiskeysockets/baileys";
 import pino from "pino";
 import fs from "fs";
 import QRCode from "qrcode";
@@ -7,67 +7,67 @@ const logger = pino({ level: "info" });
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 const studySessions = new Map();
+let qrShown = false;
 
 async function connectToWhatsApp() {
-  try { fs.rmSync("auth_info", { recursive: true, force: true }); } catch {}
-
   const { state, saveCreds } = await useMultiFileAuthState("auth_info");
-  const { version } = await fetchLatestBaileysVersion();
+  const { version, isLatest } = await fetchLatestBaileysVersion();
 
-  logger.info("Baileys version: %s", version.join("."));
+  logger.info("Baileys v%s (latest=%s)", version.join("."), isLatest);
 
   const sock = makeWASocket({
     version,
     auth: state,
     logger,
-    printQRInTerminal: true,
+    printQRInTerminal: false,
+    browser: Browsers.ubuntu("ZapCards"),
     connectTimeoutMs: 120_000,
-    defaultQueryTimeoutMs: 60_000,
+    keepAliveIntervalMs: 30_000,
+    syncFullHistory: false,
   });
 
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
+    if (qr && !qrShown) {
+      qrShown = true;
       logger.info("========================================");
-      logger.info("  QR CODE PARA CONECTAR WHATSAPP");
-      logger.info("========================================");
-      logger.info("  No celular: WhatsApp > Dispositivos");
-      logger.info("  Conectados > Vincular Dispositivo");
+      logger.info("  ZapCards WhatsApp — QR Code");
+      logger.info("  Abra WhatsApp no celular");
+      logger.info("  Dispositivos Conectados > Vincular");
       logger.info("========================================");
 
       try {
-        const qrStr = await QRCode.toString(qr, {
-          type: "terminal",
-          small: false,
-        });
-        logger.info(qrStr);
-      } catch {
-        logger.info("QR raw: %s", qr.slice(0, 100));
+        const display = await QRCode.toString(qr, { type: "terminal", small: false });
+        logger.info("\n%s", display);
+      } catch (err) {
+        logger.info("QR text: %s", qr);
+        logger.info("Cole este texto em: https://www.qr-code-generator.com");
+        logger.info("Escolha 'Texto' como tipo e gere o QR");
       }
 
-      logger.info("========================================");
-      logger.info("  Se o QR acima nao funcionar, cole");
-      logger.info("  este texto em qr-code-generator.com:");
-      logger.info("  %s", qr);
       logger.info("========================================");
     }
 
     if (connection === "close") {
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      qrShown = false;
+      const code = lastDisconnect?.error?.output?.statusCode;
+      logger.warn({ code }, "Conexao fechada");
 
-      if (statusCode === DisconnectReason.loggedOut) {
-        logger.info("Sessao expirada — limpando e tentando novamente em 3s");
+      if (code === DisconnectReason.loggedOut) {
+        logger.info("Sessao invalida — removendo auth_info");
         try { fs.rmSync("auth_info", { recursive: true, force: true }); } catch {}
-        setTimeout(connectToWhatsApp, 3000);
-      } else if (shouldReconnect) {
-        logger.info("Conexao fechada — reconectando em 5s");
-        setTimeout(connectToWhatsApp, 5000);
       }
+
+      if (code !== DisconnectReason.loggedOut) {
+        logger.info("Tentando reconectar com sessao existente...");
+      }
+
+      setTimeout(connectToWhatsApp, 3000);
     } else if (connection === "open") {
+      qrShown = false;
       logger.info("========================================");
-      logger.info("  CONECTADO! Bot pronto para uso.");
+      logger.info("  ZapCards CONECTADO! Pronto para uso.");
       logger.info("  Envie 'treinar' para estudar.");
       logger.info("========================================");
     }
@@ -76,16 +76,11 @@ async function connectToWhatsApp() {
   sock.ev.on("messages.upsert", async ({ messages }) => {
     for (const msg of messages) {
       if (!msg.message || msg.key.fromMe) continue;
-
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.buttonsResponseMessage?.selectedButtonId ||
-        "";
+      const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
       if (!text) continue;
 
       const jid = msg.key.remoteJid;
-      logger.info({ jid, text: text.slice(0, 100) }, "msg");
+      logger.info({ jid, text: text.slice(0, 80) }, "msg");
 
       const session = studySessions.get(jid);
 
@@ -105,14 +100,13 @@ async function connectToWhatsApp() {
       } else {
         try {
           const res = await fetch(`${BACKEND_URL}/api/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: text }),
           });
           const data = await res.json();
-          await sock.sendMessage(jid, { text: data.content || "Nao entendi. Tente *treinar* para estudar!" });
+          await sock.sendMessage(jid, { text: data.content || "Nao entendi. Tente *treinar*!" });
         } catch {
-          await sock.sendMessage(jid, { text: "Servidor indisponivel no momento." });
+          await sock.sendMessage(jid, { text: "Servidor indisponivel." });
         }
       }
     }
@@ -123,58 +117,48 @@ async function startStudySession(sock, jid) {
   try {
     const res = await fetch(`${BACKEND_URL}/api/flashcards`);
     const cards = await res.json();
-
     if (!cards.length) {
-      await sock.sendMessage(jid, { text: "Nenhum flashcard. Crie notas no ZapCards primeiro!" });
+      await sock.sendMessage(jid, { text: "Nenhum flashcard. Crie notas primeiro!" });
       return;
     }
-
-    const session = { cards: cards.slice(0, 10), currentIndex: 0, questionShown: false };
+    const session = { cards: cards.slice(0, 10), currentIndex: 0 };
     studySessions.set(jid, session);
-    await sendNextCard(sock, jid, session);
+    await sendCard(sock, jid, session);
   } catch (err) {
     logger.error(err);
     await sock.sendMessage(jid, { text: "Erro ao buscar flashcards." });
   }
 }
 
-async function sendNextCard(sock, jid, session) {
+async function sendCard(sock, jid, session) {
   if (session.currentIndex >= session.cards.length) {
     studySessions.delete(jid);
     return sock.sendMessage(jid, { text: "*Sessao concluida!* Otimo trabalho!\n\nDigite *treinar* para estudar novamente." });
   }
-  session.questionShown = true;
-  return sock.sendMessage(jid, { text: `*${session.currentIndex + 1}/${session.cards.length}* ${session.cards[session.currentIndex].question}\n\n_Digite resposta ou *pular*_` });
+  const card = session.cards[session.currentIndex];
+  return sock.sendMessage(jid, { text: `*${session.currentIndex + 1}/${session.cards.length}* ${card.question}\n\n_Responda ou digite *pular*_` });
 }
 
 async function handleStudyAnswer(sock, jid, text, session) {
   if (text.toLowerCase() === "pular") {
     session.currentIndex++;
-    session.questionShown = false;
-    await sock.sendMessage(jid, { text: "Pulado." });
-    return sendNextCard(sock, jid, session);
+    return sendCard(sock, jid, session);
   }
-
   const card = session.cards[session.currentIndex];
-
   try {
-    const evalRes = await fetch(`${BACKEND_URL}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: `Avalie minha resposta comparada ao gabarito:\n\nGabarito: ${card.answer}\n\nResposta: ${text}\n\nResponda CORRETO ou INCORRETO com breve feedback.` }),
+    const res = await fetch(`${BACKEND_URL}/api/chat`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: `Avalie comparado ao gabarito:\nGabarito: ${card.answer}\nResposta: ${text}\nResponda CORRETO ou INCORRETO com feedback.` }),
     });
-    const evalData = await evalRes.json();
-    await sock.sendMessage(jid, { text: `Gabarito: ${card.answer.slice(0, 200)}\n\nFeedback: ${evalData.content || "Recebido!"}` });
-
+    const data = await res.json();
+    await sock.sendMessage(jid, { text: `Gabarito: ${card.answer.slice(0, 200)}\n\n${data.content || "Recebido!"}` });
     session.currentIndex++;
-    session.questionShown = false;
-    await new Promise((r) => setTimeout(r, 1500));
-    return sendNextCard(sock, jid, session);
+    await new Promise(r => setTimeout(r, 1500));
+    return sendCard(sock, jid, session);
   } catch (err) {
     logger.error(err);
     session.currentIndex++;
-    session.questionShown = false;
-    return sendNextCard(sock, jid, session);
+    return sendCard(sock, jid, session);
   }
 }
 
