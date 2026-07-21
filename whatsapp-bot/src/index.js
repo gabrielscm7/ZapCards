@@ -1,19 +1,41 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from "@whiskeysockets/baileys";
 import pino from "pino";
 import fs from "fs";
+import http from "http";
 import QRCode from "qrcode";
 
 const logger = pino({ level: "info" });
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const PORT = process.env.PORT || 3000;
 
 const studySessions = new Map();
+let currentQrRaw = "";
 let qrShown = false;
+
+function startQrServer() {
+  http.createServer((req, res) => {
+    if (req.url === "/qr.png" && currentQrRaw) {
+      QRCode.toBuffer(currentQrRaw, { width: 500, margin: 2 }, (err, buffer) => {
+        if (err) { res.writeHead(500); return res.end("QR error"); }
+        res.writeHead(200, { "Content-Type": "image/png" });
+        res.end(buffer);
+      });
+    } else {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(`<html><body style="background:#111;color:#fff;font-family:sans-serif;text-align:center;padding:40px">
+        <h1>ZapCards QR Code</h1>
+        ${currentQrRaw ? `<img src="/qr.png" style="max-width:400px;border:8px solid #22c55e;border-radius:16px"><p style="margin-top:20px;color:#aaa">Escaneie com WhatsApp > Dispositivos Conectados > Vincular</p>` : "<p>Aguardando QR code...</p>"}
+      </body></html>`);
+    }
+  }).listen(PORT, "0.0.0.0", () => {
+    logger.info("QR server on port %s", PORT);
+  });
+}
 
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState("auth_info");
-  const { version, isLatest } = await fetchLatestBaileysVersion();
-
-  logger.info("Baileys v%s (latest=%s)", version.join("."), isLatest);
+  const { version } = await fetchLatestBaileysVersion();
+  logger.info("Baileys v%s", version.join("."));
 
   const sock = makeWASocket({
     version,
@@ -31,45 +53,29 @@ async function connectToWhatsApp() {
   sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
     if (qr && !qrShown) {
       qrShown = true;
-      logger.info("========================================");
-      logger.info("  ZapCards WhatsApp — QR Code");
-      logger.info("  Abra WhatsApp no celular");
-      logger.info("  Dispositivos Conectados > Vincular");
-      logger.info("========================================");
-
-      try {
-        const display = await QRCode.toString(qr, { type: "terminal", small: false });
-        logger.info("\n%s", display);
-      } catch (err) {
-        logger.info("QR text: %s", qr);
-        logger.info("Cole este texto em: https://www.qr-code-generator.com");
-        logger.info("Escolha 'Texto' como tipo e gere o QR");
-      }
-
-      logger.info("========================================");
+      currentQrRaw = qr;
+      logger.info("--- QR CODE GERADO ---");
+      logger.info("Abra o link do servico no navegador e va em /qr.png");
+      logger.info("Ou copie o texto abaixo e cole em qr-code-generator.com (opcao Texto):");
+      logger.info("%s", qr);
+      logger.info("--- FIM QR CODE ---");
     }
 
     if (connection === "close") {
       qrShown = false;
+      currentQrRaw = "";
       const code = lastDisconnect?.error?.output?.statusCode;
-      logger.warn({ code }, "Conexao fechada");
+      logger.warn({ code }, "Desconectado");
 
       if (code === DisconnectReason.loggedOut) {
-        logger.info("Sessao invalida — removendo auth_info");
+        logger.info("Sessao invalida — limpando auth_info");
         try { fs.rmSync("auth_info", { recursive: true, force: true }); } catch {}
       }
-
-      if (code !== DisconnectReason.loggedOut) {
-        logger.info("Tentando reconectar com sessao existente...");
-      }
-
-      setTimeout(connectToWhatsApp, 3000);
+      setTimeout(connectToWhatsApp, 5000);
     } else if (connection === "open") {
       qrShown = false;
-      logger.info("========================================");
-      logger.info("  ZapCards CONECTADO! Pronto para uso.");
-      logger.info("  Envie 'treinar' para estudar.");
-      logger.info("========================================");
+      currentQrRaw = "";
+      logger.info("--- CONECTADO AO WHATSAPP ---");
     }
   });
 
@@ -80,34 +86,23 @@ async function connectToWhatsApp() {
       if (!text) continue;
 
       const jid = msg.key.remoteJid;
-      logger.info({ jid, text: text.slice(0, 80) }, "msg");
 
       const session = studySessions.get(jid);
-
       if (text.toLowerCase() === "sair" || text.toLowerCase() === "parar") {
         studySessions.delete(jid);
         await sock.sendMessage(jid, { text: "Sessao encerrada. Digite *treinar* para comecar." });
         continue;
       }
-
-      if (session) {
-        await handleStudyAnswer(sock, jid, text, session);
-        continue;
-      }
+      if (session) { await handleStudyAnswer(sock, jid, text, session); continue; }
 
       if (text.toLowerCase().includes("treinar") || text.toLowerCase().includes("flashcard")) {
         await startStudySession(sock, jid);
       } else {
         try {
-          const res = await fetch(`${BACKEND_URL}/api/chat`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: text }),
-          });
+          const res = await fetch(`${BACKEND_URL}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: text }) });
           const data = await res.json();
-          await sock.sendMessage(jid, { text: data.content || "Nao entendi. Tente *treinar*!" });
-        } catch {
-          await sock.sendMessage(jid, { text: "Servidor indisponivel." });
-        }
+          await sock.sendMessage(jid, { text: data.content || "Nao entendi." });
+        } catch { await sock.sendMessage(jid, { text: "Servidor indisponivel." }); }
       }
     }
   });
@@ -117,17 +112,11 @@ async function startStudySession(sock, jid) {
   try {
     const res = await fetch(`${BACKEND_URL}/api/flashcards`);
     const cards = await res.json();
-    if (!cards.length) {
-      await sock.sendMessage(jid, { text: "Nenhum flashcard. Crie notas primeiro!" });
-      return;
-    }
+    if (!cards.length) { await sock.sendMessage(jid, { text: "Nenhum flashcard. Crie notas primeiro!" }); return; }
     const session = { cards: cards.slice(0, 10), currentIndex: 0 };
     studySessions.set(jid, session);
     await sendCard(sock, jid, session);
-  } catch (err) {
-    logger.error(err);
-    await sock.sendMessage(jid, { text: "Erro ao buscar flashcards." });
-  }
+  } catch { await sock.sendMessage(jid, { text: "Erro ao buscar flashcards." }); }
 }
 
 async function sendCard(sock, jid, session) {
@@ -140,26 +129,17 @@ async function sendCard(sock, jid, session) {
 }
 
 async function handleStudyAnswer(sock, jid, text, session) {
-  if (text.toLowerCase() === "pular") {
-    session.currentIndex++;
-    return sendCard(sock, jid, session);
-  }
+  if (text.toLowerCase() === "pular") { session.currentIndex++; return sendCard(sock, jid, session); }
   const card = session.cards[session.currentIndex];
   try {
-    const res = await fetch(`${BACKEND_URL}/api/chat`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: `Avalie comparado ao gabarito:\nGabarito: ${card.answer}\nResposta: ${text}\nResponda CORRETO ou INCORRETO com feedback.` }),
-    });
+    const res = await fetch(`${BACKEND_URL}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: `Avalie comparado ao gabarito:\nGabarito: ${card.answer}\nResposta: ${text}\nResponda CORRETO ou INCORRETO com feedback.` }) });
     const data = await res.json();
     await sock.sendMessage(jid, { text: `Gabarito: ${card.answer.slice(0, 200)}\n\n${data.content || "Recebido!"}` });
     session.currentIndex++;
     await new Promise(r => setTimeout(r, 1500));
     return sendCard(sock, jid, session);
-  } catch (err) {
-    logger.error(err);
-    session.currentIndex++;
-    return sendCard(sock, jid, session);
-  }
+  } catch { session.currentIndex++; return sendCard(sock, jid, session); }
 }
 
+startQrServer();
 connectToWhatsApp().catch(logger.error);
