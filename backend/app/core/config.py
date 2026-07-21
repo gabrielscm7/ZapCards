@@ -37,7 +37,7 @@ class Settings(BaseSettings):
         return self.ENVIRONMENT == "production"
 
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
-    SIMILARITY_THRESHOLD: float = 0.75
+    SIMILARITY_THRESHOLD: float = 0.40
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50
 

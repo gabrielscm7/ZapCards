@@ -5,7 +5,14 @@ import http from "http";
 import QRCode from "qrcode";
 
 const logger = pino({ level: "info" });
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND_URLS = [
+  "http://backend:8080",
+  "http://backend.railway.internal:8080",
+  process.env.BACKEND_URL,
+  "http://localhost:8000",
+].filter(Boolean);
+
+let BACKEND_URL = BACKEND_URLS[0];
 const PORT = process.env.PORT || 3000;
 
 const studySessions = new Map();
@@ -313,5 +320,19 @@ async function handleStudyAnswer(sock, jid, text, session) {
   } catch { session.currentIndex++; return sendCard(sock, jid, session); }
 }
 
+async function probeBackend() {
+  for (const url of BACKEND_URLS) {
+    try {
+      const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        BACKEND_URL = url;
+        logger.info("Backend found at %s", url);
+        return;
+      }
+    } catch {}
+  }
+  logger.warn("No backend reachable, using %s", BACKEND_URL);
+}
+
 startQrServer();
-connectToWhatsApp().catch(logger.error);
+probeBackend().then(() => connectToWhatsApp().catch(logger.error));
