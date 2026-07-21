@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,16 +9,21 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.models.note import Note, Tag, NoteLink
 from app.schemas.note import NoteCreate, NoteOut, NoteUpdate, TagOut
-from app.services.embed import schedule_embeddings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _trigger_embeddings(note_id: str):
+def _trigger_embeddings_background(note_id: str):
+    asyncio.ensure_future(_do_trigger(note_id))
+
+
+async def _do_trigger(note_id: str):
     try:
+        from app.services.embed import schedule_embeddings
         await schedule_embeddings(note_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Embedding trigger failed for note %s: %s", note_id, e)
 
 
 @router.post("", response_model=NoteOut, status_code=201)
@@ -33,7 +41,7 @@ async def create_note(payload: NoteCreate, db: AsyncSession = Depends(get_db)):
     db.add(note)
     await db.flush()
     await db.refresh(note)
-    await _trigger_embeddings(str(note.id))
+    _trigger_embeddings_background(str(note.id))
     return note
 
 
@@ -87,7 +95,7 @@ async def update_note(note_id: str, payload: NoteUpdate, db: AsyncSession = Depe
         note.tags = list(existing.values())
     await db.flush()
     await db.refresh(note)
-    await _trigger_embeddings(str(note.id))
+    _trigger_embeddings_background(str(note.id))
     return note
 
 
@@ -163,3 +171,23 @@ async def unlink_notes(note_id: str, target_id: str, db: AsyncSession = Depends(
 async def list_tags(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Tag).order_by(Tag.name))
     return result.scalars().all()
+
+
+@router.post("/{note_id}/embeddings", status_code=202)
+async def trigger_embeddings(note_id: str):
+    from app.services.embed import schedule_embeddings
+    await schedule_embeddings(note_id)
+    return {"status": "ok", "note_id": note_id}
+
+
+@router.get("/stats/embeddings")
+async def embeddings_stats(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import text
+    total = await db.execute(text("SELECT COUNT(*) FROM note_chunks WHERE embedding IS NOT NULL"))
+    total_notes = await db.execute(text("SELECT COUNT(*) FROM notes"))
+    chunks = await db.execute(text("SELECT COUNT(*) FROM note_chunks"))
+    return {
+        "notes_total": total_notes.scalar(),
+        "chunks_total": chunks.scalar(),
+        "chunks_with_embeddings": total.scalar(),
+    }

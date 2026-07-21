@@ -59,17 +59,20 @@ async def schedule_embeddings(note_id: str):
 
 
 async def _generate_embeddings_sync(note_id: str):
+    import uuid
     from sqlalchemy import select
     from app.core.database import async_session
     from app.models.note import Note, NoteChunk
 
+    nid = uuid.UUID(note_id)
+
     async with async_session() as db:
-        result = await db.execute(select(Note).where(Note.id == note_id))
+        result = await db.execute(select(Note).where(Note.id == nid))
         note = result.scalar_one_or_none()
         if not note or not note.content_md.strip():
             return
 
-        existing = await db.execute(select(NoteChunk).where(NoteChunk.note_id == note_id))
+        existing = await db.execute(select(NoteChunk).where(NoteChunk.note_id == nid))
         for chunk in existing.scalars().all():
             await db.delete(chunk)
 
@@ -78,7 +81,7 @@ async def _generate_embeddings_sync(note_id: str):
         for i in range(0, len(words), settings.CHUNK_SIZE):
             chunk_text = " ".join(words[i : i + settings.CHUNK_SIZE])
             if chunk_text.strip():
-                chunks.append(NoteChunk(note_id=note_id, content=chunk_text))
+                chunks.append(NoteChunk(note_id=nid, content=chunk_text))
 
         if chunks:
             embeddings = await embed_texts([c.content for c in chunks])
