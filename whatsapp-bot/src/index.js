@@ -6,9 +6,10 @@ import QRCode from "qrcode";
 
 const logger = pino({ level: "info" });
 const BACKEND_URLS = [
-  "http://backend:8080",
-  "http://backend.railway.internal:8080",
   process.env.BACKEND_URL,
+  "http://backend.railway.internal:8080",
+  "http://backend:8080",
+  "https://backend-production-ec5a.up.railway.app",
   "http://localhost:8000",
 ].filter(Boolean);
 
