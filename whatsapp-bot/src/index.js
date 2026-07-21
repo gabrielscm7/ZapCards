@@ -96,7 +96,7 @@ async function connectToWhatsApp() {
       if (session) { await handleStudyAnswer(sock, jid, text, session); continue; }
 
       if (text.toLowerCase().includes("treinar") || text.toLowerCase().includes("flashcard")) {
-        await startStudySession(sock, jid);
+        await handleStudyCommand(sock, jid, text);
       } else {
         try {
           const res = await fetch(`${BACKEND_URL}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: text }) });
@@ -106,6 +106,77 @@ async function connectToWhatsApp() {
       }
     }
   });
+}
+
+async function handleStudyCommand(sock, jid, text) {
+  const topic = text
+    .replace(/treinar|flashcards|flashcard|criar|sobre/gi, "")
+    .trim()
+    .replace(/^[:\-\s]+/, "");
+
+  if (topic) {
+    await sock.sendMessage(jid, { text: `Gerando flashcards sobre *${topic}*... Aguarde um momento.` });
+    await generateAndStudy(sock, jid, topic);
+    return;
+  }
+
+  const res = await fetch(`${BACKEND_URL}/api/flashcards`);
+  const cards = await res.json();
+  if (cards.length > 0) {
+    await sock.sendMessage(jid, { text: `Encontrei ${cards.length} flashcards. Iniciando sessao...` });
+    const session = { cards: cards.slice(0, 10), currentIndex: 0 };
+    studySessions.set(jid, session);
+    await sendCard(sock, jid, session);
+    return;
+  }
+
+  await sock.sendMessage(jid, { text: "Nao ha flashcards ainda. Envie *treinar sobre <assunto>* para gerar novos. Ex: *treinar sobre biologia*" });
+}
+
+async function generateAndStudy(sock, jid, topic) {
+  try {
+    const notesRes = await fetch(`${BACKEND_URL}/api/notes?search=${encodeURIComponent(topic)}`);
+    let notes = await notesRes.json();
+
+    if (!notes.length) {
+      const allRes = await fetch(`${BACKEND_URL}/api/notes`);
+      notes = await allRes.json();
+    }
+
+    if (!notes.length) {
+      await sock.sendMessage(jid, { text: "Nenhuma nota encontrada. Crie notas no ZapCards primeiro!" });
+      return;
+    }
+
+    const noteIds = notes.slice(0, 5).map(n => n.id);
+
+    const genRes = await fetch(`${BACKEND_URL}/api/flashcards/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_ids: noteIds, difficulty: "medio", quantity: 5 }),
+    });
+
+    if (!genRes.ok) {
+      await sock.sendMessage(jid, { text: "Erro ao gerar flashcards. Tente novamente." });
+      return;
+    }
+
+    const newCards = await genRes.json();
+
+    if (!newCards.length) {
+      await sock.sendMessage(jid, { text: "Nao foi possivel gerar flashcards. Verifique se as notas tem conteudo suficiente." });
+      return;
+    }
+
+    await sock.sendMessage(jid, { text: `*${newCards.length} flashcards gerados!* Iniciando sessao...` });
+
+    const session = { cards: newCards, currentIndex: 0 };
+    studySessions.set(jid, session);
+    await sendCard(sock, jid, session);
+  } catch (err) {
+    logger.error(err);
+    await sock.sendMessage(jid, { text: "Erro ao gerar flashcards. Verifique se o servidor esta rodando." });
+  }
 }
 
 async function startStudySession(sock, jid) {
