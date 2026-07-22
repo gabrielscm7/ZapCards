@@ -27,7 +27,7 @@ EXTENSION_TO_TYPE = {
 }
 
 
-async def ingest_file(file: UploadFile, area: str, db: AsyncSession) -> Note:
+async def ingest_file(file: UploadFile, area: str, db: AsyncSession, user_id: uuid.UUID | None = None) -> Note:
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise ValueError(f"Formato nao suportado: {ext}")
@@ -49,11 +49,13 @@ async def ingest_file(file: UploadFile, area: str, db: AsyncSession) -> Note:
     markdown = f"[Arquivo importado: {get_s3_public_url(file_key)}]\n\nProcessando..."
 
     note = Note(
+        user_id=user_id,
         title=title,
         content_md=markdown,
         area=area,
         source_type=source_type,
         source_file=file_key,
+        status="processing",
     )
     db.add(note)
     await db.flush()

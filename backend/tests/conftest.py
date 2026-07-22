@@ -20,8 +20,10 @@ os.environ["DEV_USE_LOCAL_STORAGE"] = "true"
 os.environ["LOCAL_STORAGE_PATH"] = "./test_uploads"
 
 from app.core.config import settings  # noqa: E402
-from app.core.database import Base, get_db  # noqa: E402
+from app.core.database import Base, get_db, get_db_read  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.user import User  # noqa: E402
+from app.services.auth import get_required_user  # noqa: E402
 
 test_engine = create_async_engine(
     settings.DATABASE_URL,
@@ -63,7 +65,48 @@ async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
+async def override_get_db_read() -> AsyncGenerator[AsyncSession, None]:
+    async with TestSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[get_db_read] = override_get_db_read
+
+
+async def override_get_required_user() -> User:
+    async with TestSessionLocal() as session:
+        from sqlalchemy import select
+        result = await session.execute(select(User).limit(1))
+        user = result.scalar_one_or_none()
+        if not user:
+            user = User(name="Test User", email="test@test.com", password_hash="...")
+            session.add(user)
+            await session.flush()
+            await session.refresh(user)
+            await session.commit()
+        return user
+
+
+app.dependency_overrides[get_required_user] = override_get_required_user
+
+
+@pytest_asyncio.fixture
+async def test_user() -> User:
+    async with TestSessionLocal() as session:
+        from sqlalchemy import select
+        result = await session.execute(select(User).limit(1))
+        user = result.scalar_one_or_none()
+        if not user:
+            user = User(name="Test User", email="test@test.com", password_hash="...")
+            session.add(user)
+            await session.flush()
+            await session.refresh(user)
+            await session.commit()
+        return user
 
 
 @pytest_asyncio.fixture

@@ -8,7 +8,9 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db, get_db_read
 from app.core.redis import get_redis
 from app.models.note import Note, Tag, NoteLink
+from app.models.user import User
 from app.schemas.note import NoteCreate, NoteOut, NoteUpdate, TagOut
+from app.services.auth import get_required_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -28,14 +30,22 @@ async def _trigger_embeddings_background(note_id: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/tags", response_model=list[TagOut])
-async def list_tags(db: AsyncSession = Depends(get_db_read)):
+async def list_tags(
+    db: AsyncSession = Depends(get_db_read),
+    user: User = Depends(get_required_user),
+):
     result = await db.execute(select(Tag).order_by(Tag.name))
     return result.scalars().all()
 
 
 @router.get("/graph/data", response_model=dict)
-async def get_graph(tag: str | None = Query(None), area: str | None = Query(None), db: AsyncSession = Depends(get_db_read)):
-    note_stmt = select(Note).options(selectinload(Note.tags))
+async def get_graph(
+    tag: str | None = Query(None),
+    area: str | None = Query(None),
+    db: AsyncSession = Depends(get_db_read),
+    user: User = Depends(get_required_user),
+):
+    note_stmt = select(Note).options(selectinload(Note.tags)).where(Note.user_id == user.id)
     if area:
         note_stmt = note_stmt.where(Note.area == area)
     if tag:
@@ -64,9 +74,15 @@ async def get_graph(tag: str | None = Query(None), area: str | None = Query(None
 
 
 @router.get("/generate-embeddings-all")
-async def generate_all_embeddings(db: AsyncSession = Depends(get_db)):
+async def generate_all_embeddings(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_required_user),
+):
     from sqlalchemy import text
-    result = await db.execute(text("SELECT id FROM notes"))
+    result = await db.execute(
+        text("SELECT id FROM notes WHERE user_id = CAST(:uid AS uuid)"),
+        {"uid": str(user.id)},
+    )
     note_ids = [row[0] for row in result.fetchall()]
     count = 0
     for nid in note_ids:
@@ -79,10 +95,16 @@ async def generate_all_embeddings(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/stats/embeddings")
-async def embeddings_stats(db: AsyncSession = Depends(get_db_read)):
+async def embeddings_stats(
+    db: AsyncSession = Depends(get_db_read),
+    user: User = Depends(get_required_user),
+):
     from sqlalchemy import text
     total_emb = await db.execute(text("SELECT COUNT(*) FROM note_chunks WHERE embedding IS NOT NULL"))
-    total_notes = await db.execute(text("SELECT COUNT(*) FROM notes"))
+    total_notes = await db.execute(
+        text("SELECT COUNT(*) FROM notes WHERE user_id = CAST(:uid AS uuid)"),
+        {"uid": str(user.id)},
+    )
     total_chunks = await db.execute(text("SELECT COUNT(*) FROM note_chunks"))
     return {
         "notes_total": total_notes.scalar(),
@@ -96,8 +118,12 @@ async def embeddings_stats(db: AsyncSession = Depends(get_db_read)):
 # ---------------------------------------------------------------------------
 
 @router.post("", response_model=NoteOut, status_code=201)
-async def create_note(payload: NoteCreate, db: AsyncSession = Depends(get_db)):
-    note = Note(**payload.model_dump(exclude={"tags"}))
+async def create_note(
+    payload: NoteCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_required_user),
+):
+    note = Note(user_id=user.id, **payload.model_dump(exclude={"tags"}))
     if payload.tags:
         result = await db.execute(select(Tag).where(Tag.name.in_(payload.tags)))
         existing = {t.name: t for t in result.scalars().all()}
@@ -120,8 +146,13 @@ async def list_notes(
     tag: str | None = Query(None),
     search: str | None = Query(None),
     db: AsyncSession = Depends(get_db_read),
+    user: User = Depends(get_required_user),
 ):
-    stmt = select(Note).options(selectinload(Note.tags))
+    stmt = (
+        select(Note)
+        .options(selectinload(Note.tags))
+        .where(Note.user_id == user.id)
+    )
     if area:
         stmt = stmt.where(Note.area == area)
     if tag:
@@ -138,9 +169,15 @@ async def list_notes(
 # ---------------------------------------------------------------------------
 
 @router.get("/{note_id}", response_model=NoteOut)
-async def get_note(note_id: str, db: AsyncSession = Depends(get_db_read)):
+async def get_note(
+    note_id: str,
+    db: AsyncSession = Depends(get_db_read),
+    user: User = Depends(get_required_user),
+):
     result = await db.execute(
-        select(Note).options(selectinload(Note.tags)).where(Note.id == note_id)
+        select(Note)
+        .options(selectinload(Note.tags))
+        .where(Note.id == note_id, Note.user_id == user.id)
     )
     note = result.scalar_one_or_none()
     if not note:
@@ -149,8 +186,15 @@ async def get_note(note_id: str, db: AsyncSession = Depends(get_db_read)):
 
 
 @router.patch("/{note_id}", response_model=NoteOut)
-async def update_note(note_id: str, payload: NoteUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Note).where(Note.id == note_id))
+async def update_note(
+    note_id: str,
+    payload: NoteUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_required_user),
+):
+    result = await db.execute(
+        select(Note).where(Note.id == note_id, Note.user_id == user.id)
+    )
     note = result.scalar_one_or_none()
     if not note:
         raise HTTPException(status_code=404, detail="Nota nao encontrada")
@@ -173,8 +217,14 @@ async def update_note(note_id: str, payload: NoteUpdate, db: AsyncSession = Depe
 
 
 @router.delete("/{note_id}", status_code=204)
-async def delete_note(note_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Note).where(Note.id == note_id))
+async def delete_note(
+    note_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_required_user),
+):
+    result = await db.execute(
+        select(Note).where(Note.id == note_id, Note.user_id == user.id)
+    )
     note = result.scalar_one_or_none()
     if not note:
         raise HTTPException(status_code=404, detail="Nota nao encontrada")
@@ -183,13 +233,32 @@ async def delete_note(note_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{note_id}/embeddings", status_code=202)
-async def trigger_embeddings(note_id: str):
+async def trigger_embeddings(
+    note_id: str,
+    user: User = Depends(get_required_user),
+):
     await _trigger_embeddings_background(note_id)
     return {"status": "ok", "note_id": note_id}
 
 
 @router.post("/{note_id}/link/{target_id}", status_code=201)
-async def link_notes(note_id: str, target_id: str, db: AsyncSession = Depends(get_db)):
+async def link_notes(
+    note_id: str,
+    target_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_required_user),
+):
+    note_result = await db.execute(
+        select(Note).where(Note.id == note_id, Note.user_id == user.id)
+    )
+    if not note_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Nota de origem nao encontrada")
+    target_result = await db.execute(
+        select(Note).where(Note.id == target_id, Note.user_id == user.id)
+    )
+    if not target_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Nota de destino nao encontrada")
+
     existing = await db.execute(
         select(NoteLink).where(
             NoteLink.from_note_id == note_id, NoteLink.to_note_id == target_id
@@ -204,7 +273,12 @@ async def link_notes(note_id: str, target_id: str, db: AsyncSession = Depends(ge
 
 
 @router.delete("/{note_id}/link/{target_id}", status_code=204)
-async def unlink_notes(note_id: str, target_id: str, db: AsyncSession = Depends(get_db)):
+async def unlink_notes(
+    note_id: str,
+    target_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_required_user),
+):
     result = await db.execute(
         select(NoteLink).where(
             NoteLink.from_note_id == note_id, NoteLink.to_note_id == target_id

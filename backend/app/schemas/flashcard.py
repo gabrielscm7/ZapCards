@@ -15,6 +15,8 @@ class FlashcardOut(BaseModel):
     question: str
     answer: str
     difficulty: str
+    card_type: str | None = None
+    metadata_json: str | None = None
     created_at: str
     model_config = {"from_attributes": True}
 

@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis import get_redis, get_redis_settings_safe
+from app.models.user import User
 from app.schemas.chat import ImportResult
+from app.services.auth import get_required_user
 from app.services.ingest import ingest_file
 
 logger = logging.getLogger(__name__)
@@ -24,11 +26,16 @@ JOB_MAP = {
 
 
 @router.post("", response_model=ImportResult, status_code=202)
-async def import_file(file: UploadFile, area: str = "", db: AsyncSession = Depends(get_db)):
+async def import_file(
+    file: UploadFile,
+    area: str = "",
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_required_user),
+):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Arquivo sem nome")
 
-    note = await ingest_file(file, area, db)
+    note = await ingest_file(file, area, db, user_id=user.id)
 
     job_name = JOB_MAP.get(note.source_type)
     if job_name:

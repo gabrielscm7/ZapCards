@@ -11,6 +11,7 @@ from app.core.database import Base
 
 DIFFICULTY_LEVELS = ("facil", "medio", "dificil")
 REVIEW_RATINGS = ("errei", "dificil", "bom", "facil")
+CARD_TYPES = ("basico", "cloze", "multipla_escolha", "verdadeiro_falso", "sequencia", "cenario")
 
 
 class Flashcard(Base):
@@ -23,6 +24,10 @@ class Flashcard(Base):
     difficulty: Mapped[str] = mapped_column(
         Enum(*DIFFICULTY_LEVELS, name="flashcard_difficulty"), nullable=False, default="medio"
     )
+    card_type: Mapped[str] = mapped_column(
+        Enum(*CARD_TYPES, name="card_type"), nullable=False, default="basico"
+    )
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

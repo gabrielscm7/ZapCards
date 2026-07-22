@@ -37,6 +37,7 @@ class NoteOut(BaseModel):
     area: str
     source_type: str
     source_file: str | None
+    status: str | None = None
     created_at: str
     updated_at: str
     tags: list[TagOut] = []

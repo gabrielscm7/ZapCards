@@ -6,13 +6,84 @@ import QRCode from "qrcode";
 
 const logger = pino({ level: "info" });
 const BACKEND_URL = process.env.BACKEND_URL || "https://backend-production-ec5a.up.railway.app";
-
-logger.info("Using backend: %s", BACKEND_URL);
+const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379/0";
 const PORT = process.env.PORT || 3000;
+const SESSION_TTL = 1800;
 
-const studySessions = new Map();
 let currentQrRaw = "";
 let qrShown = false;
+
+let redis = null;
+
+async function getRedis() {
+  if (redis) return redis;
+  const { createClient } = await import("redis");
+  redis = createClient({ url: REDIS_URL });
+  redis.on("error", (e) => logger.warn(e, "Redis error (non-fatal)"));
+  await redis.connect().catch(() => {
+    logger.warn("Redis unavailable — sessions will be in-memory only");
+    redis = null;
+  });
+  return redis;
+}
+
+const sessionKey = (jid) => `zapcards:session:${jid}`;
+
+async function getSession(jid) {
+  const r = await getRedis();
+  if (!r) return null;
+  try {
+    const raw = await r.get(sessionKey(jid));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+async function setSession(jid, session) {
+  const r = await getRedis();
+  if (!r) return;
+  await r.setEx(sessionKey(jid), SESSION_TTL, JSON.stringify(session));
+}
+
+async function delSession(jid) {
+  const r = await getRedis();
+  if (!r) return;
+  await r.del(sessionKey(jid));
+}
+
+const TIMEOUT = 15000;
+const RETRY_COUNT = 3;
+
+async function backendFetch(path, options = {}) {
+  const url = `${BACKEND_URL}${path}`;
+  const headers = {
+    ...(options.method !== "GET" && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
+    ...(options.headers || {}),
+  };
+
+  let lastError;
+  for (let attempt = 0; attempt < RETRY_COUNT; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT);
+      const res = await fetch(url, { ...options, headers, signal: controller.signal });
+      clearTimeout(timer);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Erro" }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      if (res.status === 204) return null;
+      return await res.json();
+    } catch (e) {
+      lastError = e;
+      if (attempt < RETRY_COUNT - 1) {
+        logger.warn({ attempt: attempt + 1, path }, "Retrying backend request");
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError || new Error("Request failed");
+}
 
 function startQrServer() {
   http.createServer((req, res) => {
@@ -58,8 +129,6 @@ async function connectToWhatsApp() {
       currentQrRaw = qr;
       logger.info("--- QR CODE GERADO ---");
       logger.info("Abra o link do servico no navegador e va em /qr.png");
-      logger.info("Ou copie o texto abaixo e cole em qr-code-generator.com (opcao Texto):");
-      logger.info("%s", qr);
       logger.info("--- FIM QR CODE ---");
     }
 
@@ -89,9 +158,9 @@ async function connectToWhatsApp() {
 
       const jid = msg.key.remoteJid;
 
-      const session = studySessions.get(jid);
+      const session = await getSession(jid);
       if (text.toLowerCase() === "sair" || text.toLowerCase() === "parar") {
-        studySessions.delete(jid);
+        await delSession(jid);
         await sock.sendMessage(jid, { text: "Sessao encerrada. Digite *treinar* para comecar." });
         continue;
       }
@@ -114,8 +183,7 @@ async function connectToWhatsApp() {
         await handleReadNote(sock, jid, text);
       } else {
         try {
-          const res = await fetch(`${BACKEND_URL}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: text }) });
-          const data = await res.json();
+          const data = await backendFetch("/api/chat", { method: "POST", body: JSON.stringify({ content: text }) });
           await sock.sendMessage(jid, { text: data.content || "Nao entendi." });
         } catch { await sock.sendMessage(jid, { text: "Servidor indisponivel." }); }
       }
@@ -125,13 +193,8 @@ async function connectToWhatsApp() {
 
 async function handleListNotes(sock, jid) {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/notes`);
-    const notes = await res.json();
-
-    if (!notes.length) {
-      await sock.sendMessage(jid, { text: "Nenhuma nota encontrada. Crie notas no ZapCards!" });
-      return;
-    }
+    const notes = await backendFetch("/api/notes");
+    if (!notes.length) { await sock.sendMessage(jid, { text: "Nenhuma nota encontrada." }); return; }
 
     const lines = notes.map((n, i) =>
       `${i + 1}. *${n.title || "Sem titulo"}*${n.area ? ` [${n.area}]` : ""}\n   Tags: ${n.tags?.map(t => t.name).join(", ") || "nenhuma"}`
@@ -140,23 +203,14 @@ async function handleListNotes(sock, jid) {
     const chunks = [];
     let current = "*Suas Notas:*\n\n";
     for (const line of lines) {
-      if ((current + line).length > 3800) {
-        chunks.push(current);
-        current = line + "\n";
-      } else {
-        current += line + "\n";
-      }
+      if ((current + line).length > 3800) { chunks.push(current); current = line + "\n"; }
+      else { current += line + "\n"; }
     }
     if (current.trim()) chunks.push(current);
 
-    for (const chunk of chunks) {
-      await sock.sendMessage(jid, { text: chunk });
-    }
-
+    for (const chunk of chunks) await sock.sendMessage(jid, { text: chunk });
     await sock.sendMessage(jid, { text: "Envie *ler <numero>* ou *ver <titulo>* para abrir uma nota." });
-  } catch {
-    await sock.sendMessage(jid, { text: "Erro ao buscar notas." });
-  }
+  } catch { await sock.sendMessage(jid, { text: "Erro ao buscar notas." }); }
 }
 
 async function handleReadNote(sock, jid, text) {
@@ -164,58 +218,29 @@ async function handleReadNote(sock, jid, text) {
     let query = text.replace(/^(nota|ler|ver|abrir)\s+/i, "").trim();
 
     if (/^\d+$/.test(query)) {
-      const res = await fetch(`${BACKEND_URL}/api/notes`);
-      const notes = await res.json();
+      const notes = await backendFetch("/api/notes");
       const idx = parseInt(query) - 1;
-      if (idx < 0 || idx >= notes.length) {
-        await sock.sendMessage(jid, { text: "Numero invalido. Use *notas* para ver a lista." });
-        return;
-      }
+      if (idx < 0 || idx >= notes.length) { await sock.sendMessage(jid, { text: "Numero invalido." }); return; }
       query = notes[idx].id;
     } else {
-      const searchRes = await fetch(`${BACKEND_URL}/api/notes?search=${encodeURIComponent(query)}`);
-      const searchNotes = await searchRes.json();
-      if (!searchNotes.length) {
-        await sock.sendMessage(jid, { text: `Nota "${query}" nao encontrada.` });
-        return;
-      }
+      const searchNotes = await backendFetch(`/api/notes?search=${encodeURIComponent(query)}`);
+      if (!searchNotes.length) { await sock.sendMessage(jid, { text: `Nota "${query}" nao encontrada.` }); return; }
       query = searchNotes[0].id;
     }
 
-    const noteRes = await fetch(`${BACKEND_URL}/api/notes/${query}`);
-    if (!noteRes.ok) { await sock.sendMessage(jid, { text: "Nota nao encontrada." }); return; }
-
-    const note = await noteRes.json();
+    const note = await backendFetch(`/api/notes/${query}`);
     const content = note.content_md || "(vazio)";
-
-    const sendChunks = (str, prefix) => {
-      const chunks = [];
-      for (let i = 0; i < str.length; i += 3800) {
-        chunks.push(str.slice(i, i + 3800));
-      }
-      return chunks;
-    };
-
     await sock.sendMessage(jid, { text: `*${note.title || "Sem titulo"}*${note.area ? ` [${note.area}]` : ""}\n` });
 
-    const parts = sendChunks(content);
-    for (const part of parts) {
-      await sock.sendMessage(jid, { text: part });
+    for (let i = 0; i < content.length; i += 3800) {
+      await sock.sendMessage(jid, { text: content.slice(i, i + 3800) });
     }
-
-    if (note.tags?.length) {
-      await sock.sendMessage(jid, { text: `Tags: ${note.tags.map(t => t.name).join(", ")}` });
-    }
-  } catch {
-    await sock.sendMessage(jid, { text: "Erro ao ler nota." });
-  }
+    if (note.tags?.length) await sock.sendMessage(jid, { text: `Tags: ${note.tags.map(t => t.name).join(", ")}` });
+  } catch { await sock.sendMessage(jid, { text: "Erro ao ler nota." }); }
 }
 
 async function handleStudyCommand(sock, jid, text) {
-  const topic = text
-    .replace(/treinar|flashcards|flashcard|criar|sobre/gi, "")
-    .trim()
-    .replace(/^[:\-\s]+/, "");
+  const topic = text.replace(/treinar|flashcards|flashcard|criar|sobre/gi, "").trim().replace(/^[:\-\s]+/, "");
 
   if (topic) {
     await sock.sendMessage(jid, { text: `Gerando flashcards sobre *${topic}*... Aguarde um momento.` });
@@ -223,79 +248,46 @@ async function handleStudyCommand(sock, jid, text) {
     return;
   }
 
-  const res = await fetch(`${BACKEND_URL}/api/flashcards`);
-  const cards = await res.json();
-  if (cards.length > 0) {
-    await sock.sendMessage(jid, { text: `Encontrei ${cards.length} flashcards. Iniciando sessao...` });
-    const session = { cards: cards.slice(0, 10), currentIndex: 0 };
-    studySessions.set(jid, session);
-    await sendCard(sock, jid, session);
-    return;
-  }
-
-  await sock.sendMessage(jid, { text: "Nao ha flashcards ainda. Envie *treinar sobre <assunto>* para gerar novos. Ex: *treinar sobre biologia*" });
+  try {
+    const cards = await backendFetch("/api/flashcards");
+    if (cards.length > 0) {
+      await sock.sendMessage(jid, { text: `Encontrei ${cards.length} flashcards. Iniciando sessao...` });
+      const session = { cards: cards.slice(0, 10), currentIndex: 0 };
+      await setSession(jid, session);
+      await sendCard(sock, jid, session);
+      return;
+    }
+  } catch {}
+  await sock.sendMessage(jid, { text: "Nao ha flashcards ainda. Envie *treinar sobre <assunto>* para gerar novos." });
 }
 
 async function generateAndStudy(sock, jid, topic) {
   try {
-    const notesRes = await fetch(`${BACKEND_URL}/api/notes?search=${encodeURIComponent(topic)}`);
-    let notes = await notesRes.json();
-
-    if (!notes.length) {
-      const allRes = await fetch(`${BACKEND_URL}/api/notes`);
-      notes = await allRes.json();
-    }
-
-    if (!notes.length) {
-      await sock.sendMessage(jid, { text: "Nenhuma nota encontrada. Crie notas no ZapCards primeiro!" });
-      return;
-    }
+    let notes = await backendFetch(`/api/notes?search=${encodeURIComponent(topic)}`);
+    if (!notes.length) notes = await backendFetch("/api/notes");
+    if (!notes.length) { await sock.sendMessage(jid, { text: "Nenhuma nota encontrada." }); return; }
 
     const noteIds = notes.slice(0, 5).map(n => n.id);
-
-    const genRes = await fetch(`${BACKEND_URL}/api/flashcards/generate`, {
+    const newCards = await backendFetch("/api/flashcards/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note_ids: noteIds, difficulty: "medio", quantity: 5 }),
     });
 
-    if (!genRes.ok) {
-      await sock.sendMessage(jid, { text: "Erro ao gerar flashcards. Tente novamente." });
-      return;
-    }
-
-    const newCards = await genRes.json();
-
-    if (!newCards.length) {
-      await sock.sendMessage(jid, { text: "Nao foi possivel gerar flashcards. Verifique se as notas tem conteudo suficiente." });
-      return;
-    }
-
+    if (!newCards.length) { await sock.sendMessage(jid, { text: "Nao foi possivel gerar flashcards." }); return; }
     await sock.sendMessage(jid, { text: `*${newCards.length} flashcards gerados!* Iniciando sessao...` });
 
     const session = { cards: newCards, currentIndex: 0 };
-    studySessions.set(jid, session);
+    await setSession(jid, session);
     await sendCard(sock, jid, session);
   } catch (err) {
     logger.error(err);
-    await sock.sendMessage(jid, { text: "Erro ao gerar flashcards. Verifique se o servidor esta rodando." });
+    await sock.sendMessage(jid, { text: "Erro ao gerar flashcards." });
   }
-}
-
-async function startStudySession(sock, jid) {
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/flashcards`);
-    const cards = await res.json();
-    if (!cards.length) { await sock.sendMessage(jid, { text: "Nenhum flashcard. Crie notas primeiro!" }); return; }
-    const session = { cards: cards.slice(0, 10), currentIndex: 0 };
-    studySessions.set(jid, session);
-    await sendCard(sock, jid, session);
-  } catch { await sock.sendMessage(jid, { text: "Erro ao buscar flashcards." }); }
 }
 
 async function sendCard(sock, jid, session) {
   if (session.currentIndex >= session.cards.length) {
-    studySessions.delete(jid);
+    await delSession(jid);
     return sock.sendMessage(jid, { text: "*Sessao concluida!* Otimo trabalho!\n\nDigite *treinar* para estudar novamente." });
   }
   const card = session.cards[session.currentIndex];
@@ -303,16 +295,19 @@ async function sendCard(sock, jid, session) {
 }
 
 async function handleStudyAnswer(sock, jid, text, session) {
-  if (text.toLowerCase() === "pular") { session.currentIndex++; return sendCard(sock, jid, session); }
+  if (text.toLowerCase() === "pular") { session.currentIndex++; await setSession(jid, session); return sendCard(sock, jid, session); }
   const card = session.cards[session.currentIndex];
   try {
-    const res = await fetch(`${BACKEND_URL}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: `Avalie comparado ao gabarito:\nGabarito: ${card.answer}\nResposta: ${text}\nResponda CORRETO ou INCORRETO com feedback.` }) });
-    const data = await res.json();
+    const data = await backendFetch("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ content: `Avalie comparado ao gabarito:\nGabarito: ${card.answer}\nResposta: ${text}\nResponda CORRETO ou INCORRETO com feedback.` }),
+    });
     await sock.sendMessage(jid, { text: `Gabarito: ${card.answer.slice(0, 200)}\n\n${data.content || "Recebido!"}` });
     session.currentIndex++;
+    await setSession(jid, session);
     await new Promise(r => setTimeout(r, 1500));
     return sendCard(sock, jid, session);
-  } catch { session.currentIndex++; return sendCard(sock, jid, session); }
+  } catch { session.currentIndex++; await setSession(jid, session); return sendCard(sock, jid, session); }
 }
 
 startQrServer();

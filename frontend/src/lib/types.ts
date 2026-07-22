@@ -10,6 +10,7 @@ export interface NoteOut {
   area: string;
   source_type: string;
   source_file: string | null;
+  status?: string;
   created_at: string;
   updated_at: string;
   tags: TagOut[];
@@ -35,6 +36,8 @@ export interface FlashcardOut {
   question: string;
   answer: string;
   difficulty: "facil" | "medio" | "dificil";
+  card_type?: string;
+  metadata_json?: string;
   created_at: string;
 }
 

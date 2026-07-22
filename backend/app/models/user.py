@@ -3,9 +3,14 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import DateTime, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from app.models.note import Note
 
 from app.core.database import Base
 
@@ -23,3 +28,4 @@ class User(Base):
     )
 
     review_history: Mapped[list["ReviewHistory"]] = relationship(back_populates="user", lazy="selectin")
+    notes: Mapped[list["Note"]] = relationship(back_populates="user", lazy="selectin")

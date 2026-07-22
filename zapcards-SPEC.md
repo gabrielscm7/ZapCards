@@ -9,8 +9,8 @@
 
 | Campo | Valor |
 |---|---|
-| Versao atual | 1.2.0 |
-| Ultima atualizacao | 2026-07-20 |
+| Versao atual | 1.3.0 |
+| Ultima atualizacao | 2026-07-22 |
 | Status | Implementacao ativa — backend + frontend funcionais |
 
 | Versao | Data | Alteracao | Motivo |
@@ -18,6 +18,7 @@
 | 1.0.0 | 2026-07-19 | Criacao do documento | Esboco inicial |
 | 1.1.0 | 2026-07-19 | Servicos separados + Railway Buckets + Arq | Deploy independente |
 | 1.2.0 | 2026-07-20 | Auth JWT, shadcn/ui, dark/light theme, dashboard com charts, import pipeline conectado, WhatsApp loop interativo, dev storage local, testes | Feature completion + UX overhaul |
+| 1.3.0 | 2026-07-22 | user_id FK em notes, auth obrigatoria, HNSW index, chunking por headers Markdown, note_status, retry Groq, Redis sessions no bot, card_type diversificado | Seguranca, qualidade RAG, resiliencia, flashcards diversificados |
 
 ---
 
@@ -43,11 +44,13 @@ O nucleo de notas em Markdown e a fonte unica da verdade. Todos os modulos leem 
 ```
 notes
   id            uuid pk
+  user_id       fk -> users.id (NOT NULL)
   title         text
   content_md    text
   area          text
   source_type   enum(text, ocr, pdf, docx, csv, audio, video)
   source_file   text
+  status        enum(processing, ready, failed) default ready
   created_at    timestamp
   updated_at    timestamp
 
@@ -57,7 +60,7 @@ tags
 
 note_tags        (many-to-many)
 note_links       (directed graph edges)
-note_chunks      (pgvector embeddings, 1024-dim, IVFFlat index)
+note_chunks      (pgvector embeddings, 1024-dim, HNSW index m=16 ef_construction=64)
 
 flashcards
   id            uuid pk
@@ -65,6 +68,8 @@ flashcards
   question      text
   answer        text
   difficulty    enum(facil, medio, dificil)
+  card_type     enum(basico, cloze, multipla_escolha, verdadeiro_falso, sequencia, cenario)
+  metadata_json text (nullable — armazena options[], steps[], correct_index, etc.)
 
 review_history
   id            uuid pk
@@ -87,27 +92,31 @@ users
 ## 4. Pipeline de ingestao
 
 1. Upload do arquivo → salvo no storage (S3 ou local dev)
-2. Job assincrono (Arq/Redis) identifica tipo e roteia:
+2. Note criada com `status = 'processing'` e `user_id` do usuario autenticado
+3. Job assincrono (Arq/Redis) identifica tipo e roteia:
    - Imagem → OCR (Tesseract) → Markdown
    - PDF/DOC/DOCX/CSV → markitdown → Markdown
-   - Audio/Video → Groq Whisper → Markdown
-3. Markdown salvo como nota (`notes.content_md`)
-4. Nota chunked → embeddings gerados → salvos em `note_chunks`
+   - Audio/Video → Groq Whisper (com retry 3x) → Markdown
+4. Markdown salvo como nota (`notes.content_md`)
+5. Nota chunked por estrutura Markdown (headers # e ##) + fallback por CHUNK_SIZE
+6. Embeddings gerados → salvos em `note_chunks`
+7. Se sucesso: `status = 'ready'`. Se erro: `status = 'failed'`
 
 ## 5. Pipeline de RAG
 
 1. Query vetorizada pelo modelo de embeddings (BAAI/bge-m3)
-2. Busca por similaridade cosseno em `note_chunks` via pgvector
-3. Filtro de confianca (threshold default 0.75) — sem LLM se abaixo
-4. Chunks + system prompt restritivo enviados ao Groq
-5. Resposta retornada com fontes dos chunks recuperados
+2. Busca por similaridade cosseno em `note_chunks` via pgvector (HNSW index, m=16, ef_construction=64)
+3. Filtro de confianca (threshold default 0.70) — sem LLM se abaixo
+4. Chunks + system prompt restritivo enviados ao Groq (com retry 3x via tenacity)
+5. Resposta retornada com fontes dos chunks recuperados, filtradas por user_id
 
 ## 6. Autenticacao
 
 - JWT (HS256) com python-jose + passlib (bcrypt)
 - Endpoints: POST /api/auth/register, POST /api/auth/login, GET /api/auth/me
-- Middleware opcional — endpoints funcionam sem auth, com suporte a bearer token
-- User model com email e password_hash para auth
+- SEGURANCA: JWT obrigatorio em /api/notes/*, /api/flashcards/*, /api/chat, /api/notes/import
+- APENAS /api/health e /api/auth/* permanecem sem autenticacao
+- Todo conteudo isolado por user_id: notes, flashcards, note_chunks, chat RAG
 
 ## 7. Frontend
 
@@ -117,6 +126,8 @@ users
 - Dashboard com graficos interativos (recharts: Pie, Bar)
 - Sidebar navigation com icones lucide-react
 - Toast notifications (sonner)
+- Flashcard page com suporte a 6 card_types: basico, cloze, multipla_escolha, verdadeiro_falso, sequencia, cenario
+- Indicador de note_status (processing/ready/failed) na biblioteca e import
 
 ## 8. Motor de repeticao espacada (FSRS)
 
@@ -127,8 +138,9 @@ users
 ## 9. Bot de WhatsApp
 
 - Baileys (WhatsApp Web API)
-- Sessao de estudo interativa com loop de Q&A
-- Avaliacao semantica de respostas via LLM
+- Sessoes de estudo armazenadas no Redis com TTL de 30 min
+- HTTP client tipado com retry (3 tentativas) e timeout (15s)
+- Avaliacao de respostas ramificada por card_type (sem LLM para multipla_escolha/cloze/verdadeiro_falso)
 - Comandos: "treinar"/"flashcard" inicia, "pular" avanca, "sair" encerra
 
 ## 10. Contratos de API
