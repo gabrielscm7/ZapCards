@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db_read
 from app.schemas.chat import ChatMessage, ChatResponse
 from app.services.embed import embed_query, search_similar
 from app.services.llm import chat_with_context
@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(payload: ChatMessage, db: AsyncSession = Depends(get_db)):
+async def chat(payload: ChatMessage, db: AsyncSession = Depends(get_db_read)):
     query_embedding = await embed_query(payload.content)
     chunks = await search_similar(db, query_embedding, limit=5)
 

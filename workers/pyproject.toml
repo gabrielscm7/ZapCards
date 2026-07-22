@@ -17,6 +17,7 @@ dependencies = [
     "Pillow>=11.0.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
+    "cryptography>=41.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]

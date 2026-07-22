@@ -21,7 +21,7 @@ export default function FlashcardsPage() {
   const [cards, setCards] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
-  const [difficulty, setDifficulty] = useState("medio");
+  const [difficulty, setDifficulty] = useState<"facil" | "medio" | "dificil">("medio");
   const [quantity, setQuantity] = useState(5);
   const [flipped, setFlipped] = useState<Record<string, boolean>>({});
   const [generating, setGenerating] = useState(false);

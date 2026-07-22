@@ -1,4 +1,5 @@
 import logging
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,10 +8,12 @@ from sqlalchemy import text
 
 from app.api import notes, flashcards, chat, import_, auth, settings as settings_api
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.core.database import engine, Base
 import app.models  # noqa: F401 — registers all models
 
-logger = logging.getLogger(__name__)
+setup_logging()
+logger = logging.getLogger("zapcards")
 
 
 @asynccontextmanager

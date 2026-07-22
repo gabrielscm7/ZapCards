@@ -1,0 +1,318 @@
+<mxfile host="app.diagrams.net" modified="2026-07-22T00:00:00.000Z" agent="opencode" version="24.0.0">
+  <diagram name="C4-Container" id="c4-container">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="ZapCards — C4 Container Diagram (v1.2.0)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=22;fontStyle=1;fontColor=#1a1a2e;" vertex="1" parent="1">
+          <mxGeometry x="400" y="10" width="700" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- FRONTEND CONTAINER                                            -->
+        <!-- ============================================================ -->
+        <mxCell id="fe-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=14;fontStyle=1;fontColor=#1e40af;verticalAlign=top;align=left;spacingLeft=15;spacingTop=8;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="30" y="80" width="330" height="320" as="geometry"/>
+        </mxCell>
+        <mxCell id="fe-label" value="&lt;b&gt;Frontend (Next.js 15 + React 19)&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontStyle=1;fontColor=#1e40af;" vertex="1" parent="1">
+          <mxGeometry x="45" y="88" width="300" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fe-web" value="&lt;b&gt;Web Dashboard&lt;/b&gt;&lt;br&gt;Tailwind 4 + shadcn/ui&lt;br&gt;recharts, force-graph&lt;br&gt;next-themes (dark/light)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#60a5fa;fontSize=11;fontColor=#1e40af;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="55" y="125" width="280" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fe-pages" value="&lt;b&gt;Pages&lt;/b&gt;: Dashboard · Biblioteca · Chat&lt;br&gt;Flashcards · Graph · Import · Notes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#60a5fa;fontSize=10;fontColor=#1e40af;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="55" y="220" width="280" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fe-state" value="&lt;b&gt;State&lt;/b&gt;: zustand · &lt;b&gt;API&lt;/b&gt;: lib/api.ts (fetch wrapper)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#60a5fa;fontSize=10;fontColor=#1e40af;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="55" y="285" width="280" height="95" as="geometry"/>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- BACKEND CONTAINER                                             -->
+        <!-- ============================================================ -->
+        <mxCell id="be-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#22c55e;fontSize=14;fontStyle=1;fontColor=#166534;verticalAlign=top;align=left;spacingLeft=15;spacingTop=8;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="400" y="80" width="400" height="380" as="geometry"/>
+        </mxCell>
+        <mxCell id="be-label" value="&lt;b&gt;Backend API (FastAPI)&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontStyle=1;fontColor=#166534;" vertex="1" parent="1">
+          <mxGeometry x="415" y="88" width="300" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="be-api" value="&lt;b&gt;API Routes&lt;/b&gt;&lt;br&gt;/api/notes · /api/chat&lt;br&gt;/api/flashcards · /api/auth&lt;br&gt;/api/health · /api/settings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#86efac;fontSize=10;fontColor=#166534;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="420" y="125" width="170" height="85" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="be-services" value="&lt;b&gt;Services&lt;/b&gt;&lt;br&gt;llm.py (Groq)&lt;br&gt;embed.py (bge-m3)&lt;br&gt;auth.py (JWT)&lt;br&gt;ingest.py (files)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#86efac;fontSize=10;fontColor=#166534;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="605" y="125" width="170" height="85" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="be-models" value="&lt;b&gt;Models (SQLAlchemy)&lt;/b&gt;&lt;br&gt;Note · Tag · NoteLink&lt;br&gt;NoteChunk · Flashcard&lt;br&gt;ReviewHistory · User" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#86efac;fontSize=10;fontColor=#166534;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="420" y="230" width="170" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="be-core" value="&lt;b&gt;Core Infra&lt;/b&gt;&lt;br&gt;config.py (pydantic)&lt;br&gt;database.py (async engine)&lt;br&gt;redis.py (Arq pool)&lt;br&gt;s3.py (storage client)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#86efac;fontSize=10;fontColor=#166534;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="605" y="230" width="170" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="be-lifespan" value="&lt;b&gt;Lifespan&lt;/b&gt;: create_all + extensions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#86efac;fontSize=9;fontColor=#166534;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="420" y="345" width="355" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="be-deploy" value="Railway: uvicorn app.main:app --host 0.0.0.0 --port 8000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#ec4899;fontSize=9;fontColor=#be185d;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="420" y="385" width="355" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- WORKERS CONTAINER                                             -->
+        <!-- ============================================================ -->
+        <mxCell id="w-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#eab308;fontSize=14;fontStyle=1;fontColor=#854d0e;verticalAlign=top;align=left;spacingLeft=15;spacingTop=8;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="840" y="80" width="330" height="380" as="geometry"/>
+        </mxCell>
+        <mxCell id="w-label" value="&lt;b&gt;Workers (Arq + Redis)&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontStyle=1;fontColor=#854d0e;" vertex="1" parent="1">
+          <mxGeometry x="855" y="88" width="300" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="w-ocr" value="&lt;b&gt;process_ocr&lt;/b&gt;&lt;br&gt;Tesseract&lt;br&gt;Image → Text" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#facc15;fontSize=10;fontColor=#854d0e;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="860" y="125" width="140" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="w-pdf" value="&lt;b&gt;process_pdf&lt;/b&gt;&lt;br&gt;MarkItDown&lt;br&gt;PDF/DOCX → MD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#facc15;fontSize=10;fontColor=#854d0e;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1015" y="125" width="140" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="w-audio" value="&lt;b&gt;process_audio&lt;/b&gt;&lt;br&gt;Groq Whisper&lt;br&gt;Audio → Text" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#facc15;fontSize=10;fontColor=#854d0e;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="860" y="205" width="140" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="w-embed" value="&lt;b&gt;generate_embeddings&lt;/b&gt;&lt;br&gt;sentence-transformers&lt;br&gt;BAAI/bge-m3 (1024d)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#facc15;fontSize=10;fontColor=#854d0e;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1015" y="205" width="140" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="w-update" value="&lt;b&gt;update_note_content&lt;/b&gt;&lt;br&gt;DB update + enqueue embed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#facc15;fontSize=10;fontColor=#854d0e;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="860" y="285" width="295" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="w-pipeline" value="Pipeline: Import → OCR/PDF/Audio → update_note → embeddings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#facc15;fontSize=9;fontColor=#854d0e;arcSize=8;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="860" y="350" width="295" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="w-deploy" value="Railway: arq app.main.WorkerSettings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#ec4899;fontSize=9;fontColor=#be185d;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="860" y="395" width="295" height="25" as="geometry"/>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- WHATSAPP BOT CONTAINER                                        -->
+        <!-- ============================================================ -->
+        <mxCell id="wb-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#ec4899;fontSize=14;fontStyle=1;fontColor=#be185d;verticalAlign=top;align=left;spacingLeft=15;spacingTop=8;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="80" width="320" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="wb-label" value="&lt;b&gt;WhatsApp Bot (Node.js + Baileys)&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#be185d;" vertex="1" parent="1">
+          <mxGeometry x="1225" y="88" width="290" height="20" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="wb-sessions" value="&lt;b&gt;Study Sessions&lt;/b&gt;&lt;br&gt;In-memory Map&lt;br&gt;Commands: treinar, notas&lt;br&gt;ler, pular, sair" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#f9a8d4;fontSize=10;fontColor=#be185d;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="120" width="140" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="wb-handlers" value="&lt;b&gt;Message Handler&lt;/b&gt;&lt;br&gt;QR Auth&lt;br&gt;Auto-reconnect&lt;br&gt;Chat fallback → API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#f9a8d4;fontSize=10;fontColor=#be185d;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="120" width="130" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="wb-deploy" value="Railway: node src/index.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#ec4899;fontSize=9;fontColor=#be185d;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="210" width="285" height="25" as="geometry"/>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- DATA STORES                                                   -->
+        <!-- ============================================================ -->
+        <mxCell id="pg-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f3ff;strokeColor=#8b5cf6;fontSize=14;fontStyle=1;fontColor=#5b21b6;verticalAlign=top;align=left;spacingLeft=15;spacingTop=8;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="200" y="500" width="300" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="pg-label" value="&lt;b&gt;PostgreSQL + pgvector&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#5b21b6;" vertex="1" parent="1">
+          <mxGeometry x="215" y="508" width="270" height="20" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="pg-tables" value="&lt;b&gt;Tables (7)&lt;/b&gt;&lt;br&gt;notes · tags · note_tags&lt;br&gt;note_links · note_chunks&lt;br&gt;flashcards · review_history · users&lt;br&gt;&lt;b&gt;Index&lt;/b&gt;: IVFFlat (embedding, 100 lists)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#c4b5fd;fontSize=10;fontColor=#5b21b6;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="215" y="540" width="270" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="pg-notes" value="Rails: Railway provisiona DATABASE_URL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#c4b5fd;fontSize=9;fontColor=#5b21b6;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="215" y="665" width="270" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="redis-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=14;fontStyle=1;fontColor=#991b1b;verticalAlign=top;align=left;spacingLeft=15;spacingTop=8;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="540" y="500" width="250" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="redis-label" value="&lt;b&gt;Redis (Arq Broker)&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#991b1b;" vertex="1" parent="1">
+          <mxGeometry x="555" y="508" width="220" height="20" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="redis-queues" value="&lt;b&gt;Job Queues&lt;/b&gt;&lt;br&gt;process_ocr · process_pdf · process_audio&lt;br&gt;generate_embeddings · update_note_content" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#fca5a5;fontSize=10;fontColor=#991b1b;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="540" width="220" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="s3-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdfa;strokeColor=#14b8a6;fontSize=14;fontStyle=1;fontColor=#115e59;verticalAlign=top;align=left;spacingLeft=15;spacingTop=8;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="830" y="500" width="700" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="s3-label" value="&lt;b&gt;File Storage (Railway Buckets S3 / Local)&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#115e59;" vertex="1" parent="1">
+          <mxGeometry x="845" y="508" width="350" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="s3-files" value="Uploads: .jpg · .png · .pdf · .docx · .csv · .mp3 · .mp4 · .mov&lt;br&gt;Dev fallback: DEV_USE_LOCAL_STORAGE=true → ./uploads/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ccfbf1;strokeColor=#99f6e4;fontSize=10;fontColor=#115e59;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="845" y="540" width="670" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- EXTERNAL SERVICES                                             -->
+        <!-- ============================================================ -->
+        <mxCell id="groq-box" value="&lt;b&gt;Groq Cloud API&lt;/b&gt;&lt;br&gt;llama-3.1-8b-instant (chat)&lt;br&gt;llama-3.3-70b-versatile (flashcards)&lt;br&gt;whisper-large-v3-turbo (audio)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=10;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="540" y="680" width="320" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="whatsapp-ext" value="&lt;b&gt;WhatsApp Web API&lt;/b&gt;&lt;br&gt;via Baileys 6.7.8&lt;br&gt;(não-oficial, MVP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=10;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="200" y="760" width="200" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="hf-box" value="&lt;b&gt;HuggingFace Models&lt;/b&gt;&lt;br&gt;BAAI/bge-m3&lt;br&gt;(local download, CPU)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=10;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="440" y="760" width="200" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- CONNECTIONS                                                   -->
+        <!-- ============================================================ -->
+
+        <!-- Frontend → Backend -->
+        <mxCell id="c-fe-be" value="HTTP/REST (fetch)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#3b82f6;strokeWidth=2;fontSize=9;fontColor=#3b82f6;endArrow=block;endFill=1;" edge="1" parent="1" source="fe-box" target="be-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- WhatsApp → Backend -->
+        <mxCell id="c-wb-be" value="HTTP/REST (fetch)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ec4899;strokeWidth=2;fontSize=9;fontColor=#ec4899;endArrow=block;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="wb-box" target="be-box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1190" y="170"/>
+              <mxPoint x="810" y="170"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Workers → Backend (same code, shared DB) -->
+        <mxCell id="c-w-be" value="DB shared" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#eab308;strokeWidth=1;fontSize=9;fontColor=#854d0e;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="w-box" target="be-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Backend → PostgreSQL -->
+        <mxCell id="c-be-pg" value="asyncpg + SQLAlchemy" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8b5cf6;strokeWidth=2;fontSize=9;fontColor=#8b5cf6;endArrow=block;endFill=1;" edge="1" parent="1" source="be-box" target="pg-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Workers → PostgreSQL -->
+        <mxCell id="c-w-pg" value="raw SQL (text)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8b5cf6;strokeWidth=1;fontSize=9;fontColor=#8b5cf6;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="w-box" target="pg-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Backend → Redis -->
+        <mxCell id="c-be-redis" value="Arq enqueue" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ef4444;strokeWidth=1;fontSize=9;fontColor=#ef4444;endArrow=block;endFill=1;" edge="1" parent="1" source="be-box" target="redis-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Workers → Redis -->
+        <mxCell id="c-w-redis" value="Arq dequeue" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ef4444;strokeWidth=2;fontSize=9;fontColor=#ef4444;endArrow=block;endFill=1;" edge="1" parent="1" source="w-box" target="redis-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Workers → S3 -->
+        <mxCell id="c-w-s3" value="get_file()" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#14b8a6;strokeWidth=1;fontSize=9;fontColor=#14b8a6;endArrow=block;endFill=1;" edge="1" parent="1" source="w-box" target="s3-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Backend → S3 -->
+        <mxCell id="c-be-s3" value="save_file()" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#14b8a6;strokeWidth=1;fontSize=9;fontColor=#14b8a6;endArrow=block;endFill=1;" edge="1" parent="1" source="be-box" target="s3-box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="750" y="480"/>
+              <mxPoint x="750" y="480"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Backend → Groq -->
+        <mxCell id="c-be-groq" value="chat · flashcards · eval" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22c55e;strokeWidth=2;fontSize=9;fontColor=#22c55e;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="be-box" target="groq-box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="520" y="480"/>
+              <mxPoint x="520" y="640"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Workers → Groq -->
+        <mxCell id="c-w-groq" value="transcribe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22c55e;strokeWidth=1;fontSize=9;fontColor=#22c55e;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="w-box" target="groq-box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1000" y="480"/>
+              <mxPoint x="1000" y="640"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- WhatsApp Bot → WhatsApp -->
+        <mxCell id="c-wb-wa" value="Baileys WebSocket" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ec4899;strokeWidth=1;fontSize=9;fontColor=#ec4899;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="wb-box" target="whatsapp-ext">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1280" y="280"/>
+              <mxPoint x="300" y="280"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Workers → HF -->
+        <mxCell id="c-w-hf" value="download model" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22c55e;strokeWidth=1;fontSize=9;fontColor=#22c55e;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="w-box" target="hf-box">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Key -->
+        <mxCell id="key-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#cbd5e1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=5;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="900" y="640" width="630" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="key-title" value="&lt;b&gt;Legenda de Cores&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=11;fontStyle=1;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry x="910" y="648" width="200" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-fe" value="Frontend Next.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#60a5fa;fontSize=9;fontColor=#1e40af;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="910" y="675" width="140" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-be" value="Backend FastAPI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#86efac;fontSize=9;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="675" width="140" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-w" value="Workers Arq" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#facc15;fontSize=9;fontColor=#854d0e;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="675" width="140" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-wb" value="WhatsApp Bot" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#f9a8d4;fontSize=9;fontColor=#be185d;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="675" width="140" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-db" value="PostgreSQL + pgvector" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#c4b5fd;fontSize=9;fontColor=#5b21b6;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="910" y="710" width="140" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-redis" value="Redis (Arq Broker)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#fca5a5;fontSize=9;fontColor=#991b1b;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="710" width="140" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-s3" value="S3 File Storage" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ccfbf1;strokeColor=#99f6e4;fontSize=9;fontColor=#115e59;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="710" width="140" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-ext" value="External Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=9;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="710" width="140" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-solid" value="─── Sincrono │ --- Async/External │ Dashed: Indirect" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontColor=#64748b;" vertex="1" parent="1">
+          <mxGeometry x="910" y="748" width="600" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="k-deploy" value="Infra/Deploy Rail" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#ec4899;fontSize=9;fontColor=#be185d;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="910" y="775" width="140" height="25" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

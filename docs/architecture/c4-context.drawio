@@ -1,0 +1,102 @@
+<mxfile host="app.diagrams.net" modified="2026-07-22T00:00:00.000Z" agent="opencode" version="24.0.0">
+  <diagram name="C4-Contexto" id="c4-context">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="ZapCards — C4 Context Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=24;fontStyle=1;fontColor=#1a1a2e;" vertex="1" parent="1">
+          <mxGeometry x="350" y="20" width="600" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- System Boundary -->
+        <mxCell id="bounds" value="ZapCards Platform" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#0ea5e9;fontSize=18;fontStyle=1;fontColor=#0ea5e9;verticalAlign=top;align=left;spacingLeft=20;spacingTop=10;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="200" y="250" width="1000" height="550" as="geometry"/>
+        </mxCell>
+
+        <!-- Core System -->
+        <mxCell id="core" value="&lt;b&gt;ZapCards Core&lt;/b&gt;&lt;br&gt;Estudos + Flashcards + RAG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0ea5e9;strokeColor=#0369a1;fontSize=14;fontColor=#ffffff;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="500" y="450" width="380" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- Users -->
+        <mxCell id="user1" value="&lt;b&gt;Estudante&lt;/b&gt;&lt;br&gt;(Gabriel)&lt;br&gt;via Web Dashboard" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=12;fontColor=#92400e;" vertex="1" parent="1">
+          <mxGeometry x="60" y="80" width="60" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="user2" value="&lt;b&gt;Estudante&lt;/b&gt;&lt;br&gt;(Mobile)&lt;br&gt;via WhatsApp" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=12;fontColor=#92400e;" vertex="1" parent="1">
+          <mxGeometry x="180" y="80" width="60" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="user3" value="&lt;b&gt;Estudante&lt;/b&gt;&lt;br&gt;(API)&lt;br&gt;via REST Client" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=12;fontColor=#92400e;" vertex="1" parent="1">
+          <mxGeometry x="280" y="80" width="60" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- External Systems -->
+        <mxCell id="ext-groq" value="&lt;b&gt;Groq API&lt;/b&gt;&lt;br&gt;LLM Llama 3.1 8B&lt;br&gt;Llama 3.3 70B&lt;br&gt;Whisper Large v3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="80" width="200" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ext-s3" value="&lt;b&gt;Railway Buckets (S3)&lt;/b&gt;&lt;br&gt;File Storage&lt;br&gt;(Local em dev)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1310" y="80" width="180" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ext-railway" value="&lt;b&gt;Railway PaaS&lt;/b&gt;&lt;br&gt;Deploy &amp; Infra" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#ec4899;fontSize=11;fontColor=#be185d;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1310" y="220" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ext-whatsapp" value="&lt;b&gt;WhatsApp&lt;/b&gt;&lt;br&gt;Web API (Baileys)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="220" width="200" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Relationships -->
+        <mxCell id="rel1" value="Estuda, faz anotações" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#f59e0b;fontSize=10;fontColor=#92400e;endArrow=block;endFill=1;" edge="1" parent="1" source="user1" target="core">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel2" value="Estuda por chat" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#f59e0b;fontSize=10;fontColor=#92400e;endArrow=block;endFill=1;" edge="1" parent="1" source="user2" target="core">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel3" value="Integração via API" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#f59e0b;fontSize=10;fontColor=#92400e;endArrow=block;endFill=1;" edge="1" parent="1" source="user3" target="core">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel4" value="Inferência LLM" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22c55e;fontSize=10;fontColor=#166534;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="core" target="ext-groq">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel5" value="Arquivos" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22c55e;fontSize=10;fontColor=#166534;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="core" target="ext-s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel6" value="Mensagens WhatsApp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22c55e;fontSize=10;fontColor=#166534;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="core" target="ext-whatsapp">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel7" value="Deploy de todos os serviços" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ec4899;fontSize=10;fontColor=#be185d;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="core" target="ext-railway">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend-title" value="Legenda" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#1a1a2e;" vertex="1" parent="1">
+          <mxGeometry x="60" y="820" width="80" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-actor" value="Usuário" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=9;fontColor=#92400e;" vertex="1" parent="1">
+          <mxGeometry x="60" y="860" width="30" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-system" value="Sistema" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0ea5e9;strokeColor=#0369a1;fontSize=9;fontColor=#ffffff;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="150" y="870" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-ext" value="Externo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=9;fontColor=#166534;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="300" y="870" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-infra" value="Infra" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce7f3;strokeColor=#ec4899;fontSize=9;fontColor=#be185d;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="450" y="870" width="100" height="40" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

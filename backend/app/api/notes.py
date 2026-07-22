@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_db
+from app.core.database import get_db, get_db_read
+from app.core.redis import get_redis
 from app.models.note import Note, Tag, NoteLink
 from app.schemas.note import NoteCreate, NoteOut, NoteUpdate, TagOut
 
@@ -14,20 +14,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _trigger_embeddings_background(note_id: str):
+async def _trigger_embeddings_background(note_id: str):
     try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_do_trigger(note_id))
-    except RuntimeError:
-        pass
-
-
-async def _do_trigger(note_id: str):
-    try:
-        from app.services.embed import schedule_embeddings
-        await schedule_embeddings(note_id)
+        pool = await get_redis()
+        await pool.enqueue_job("generate_embeddings", note_id)
+        logger.info("Enqueued embedding generation for note %s", note_id[:8])
     except Exception as e:
-        logger.warning("Embedding trigger failed for note %s: %s", note_id, e)
+        logger.warning("Could not enqueue embedding job for note %s: %s", note_id[:8], e)
 
 
 # ---------------------------------------------------------------------------
@@ -35,13 +28,13 @@ async def _do_trigger(note_id: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/tags", response_model=list[TagOut])
-async def list_tags(db: AsyncSession = Depends(get_db)):
+async def list_tags(db: AsyncSession = Depends(get_db_read)):
     result = await db.execute(select(Tag).order_by(Tag.name))
     return result.scalars().all()
 
 
 @router.get("/graph/data", response_model=dict)
-async def get_graph(tag: str | None = Query(None), area: str | None = Query(None), db: AsyncSession = Depends(get_db)):
+async def get_graph(tag: str | None = Query(None), area: str | None = Query(None), db: AsyncSession = Depends(get_db_read)):
     note_stmt = select(Note).options(selectinload(Note.tags))
     if area:
         note_stmt = note_stmt.where(Note.area == area)
@@ -86,7 +79,7 @@ async def generate_all_embeddings(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/stats/embeddings")
-async def embeddings_stats(db: AsyncSession = Depends(get_db)):
+async def embeddings_stats(db: AsyncSession = Depends(get_db_read)):
     from sqlalchemy import text
     total_emb = await db.execute(text("SELECT COUNT(*) FROM note_chunks WHERE embedding IS NOT NULL"))
     total_notes = await db.execute(text("SELECT COUNT(*) FROM notes"))
@@ -126,7 +119,7 @@ async def list_notes(
     area: str | None = Query(None),
     tag: str | None = Query(None),
     search: str | None = Query(None),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db_read),
 ):
     stmt = select(Note).options(selectinload(Note.tags))
     if area:
@@ -145,7 +138,7 @@ async def list_notes(
 # ---------------------------------------------------------------------------
 
 @router.get("/{note_id}", response_model=NoteOut)
-async def get_note(note_id: str, db: AsyncSession = Depends(get_db)):
+async def get_note(note_id: str, db: AsyncSession = Depends(get_db_read)):
     result = await db.execute(
         select(Note).options(selectinload(Note.tags)).where(Note.id == note_id)
     )
@@ -191,8 +184,7 @@ async def delete_note(note_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{note_id}/embeddings", status_code=202)
 async def trigger_embeddings(note_id: str):
-    from app.services.embed import schedule_embeddings
-    await schedule_embeddings(note_id)
+    await _trigger_embeddings_background(note_id)
     return {"status": "ok", "note_id": note_id}
 
 

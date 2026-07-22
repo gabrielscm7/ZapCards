@@ -3,6 +3,6 @@
     "builder": "nixpacks"
   },
   "deploy": {
-    "startCommand": "arq app.main.WorkerSettings"
+    "startCommand": "PYTHONPATH=../backend:$PYTHONPATH arq app.main.WorkerSettings"
   }
 }
