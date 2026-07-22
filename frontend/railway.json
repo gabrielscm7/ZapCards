@@ -4,6 +4,6 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "npx next start -p ${PORT}"
+    "startCommand": "npx next start"
   }
 }
