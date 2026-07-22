@@ -1,8 +1,5 @@
 {
-  "build": {
-    "buildCommand": "npm run build"
-  },
   "deploy": {
-    "startCommand": "npx next start"
+    "startCommand": "node server.js"
   }
 }
