@@ -1,7 +1,5 @@
 {
-  "build": {
-    "builder": "nixpacks"
-  },
+  "build": {},
   "deploy": {
     "startCommand": "PYTHONPATH=../backend:$PYTHONPATH arq app.main.WorkerSettings"
   }
